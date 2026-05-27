@@ -1,12 +1,5 @@
 """
 Módulo para procesar y corregir archivos CSS de revistas académicas.
-
-Realiza las siguientes tareas:
-- Copia archivos CSS originales a la carpeta de salida
-- Corrige colores transparentes (#0000) a negro (#000000)
-- Convierte unidades absolutas (px) a relativas (em) para web
-- Ajusta rutas relativas de recursos
-- Genera CSS adicional para replicar el formato de referencia de la RMDE
 """
 
 import os
@@ -14,13 +7,8 @@ import re
 import shutil
 from typing import List, Dict
 
-
-# ──────────────────────────────────────────────────────────
-#  Mapeo de conversión px → em (base 12px)
-# ──────────────────────────────────────────────────────────
 _BASE_FONT_PX = 12.0
 
-# Tamaños de fuente originales en px y su equivalencia em
 _FONT_SIZE_MAP: Dict[str, str] = {
     "5px": "0.55em",
     "9px": "0.9em",
@@ -28,7 +16,6 @@ _FONT_SIZE_MAP: Dict[str, str] = {
     "12px": "1.3em",
 }
 
-# Márgenes comunes: px → em (aproximaciones)
 _MARGIN_MAP: Dict[str, str] = {
     "0": "0",
     "2px": "0.2em",
@@ -43,16 +30,7 @@ _MARGIN_MAP: Dict[str, str] = {
     "36px": "4.0em",
 }
 
-
 def _px_a_em(valor_px: str) -> str:
-    """Convierte un valor en px a em con base 12px.
-
-    Args:
-        valor_px: Valor CSS con unidad px (ej. "18px").
-
-    Returns:
-        Valor convertido a em (ej. "2.0em"), o el original si no aplica.
-    """
     match = re.match(r"^(-?\d+(?:\.\d+)?)px$", valor_px.strip())
     if not match:
         return valor_px
@@ -64,25 +42,8 @@ def _px_a_em(valor_px: str) -> str:
 
 
 def corregir_css(contenido_css: str) -> str:
-    """Corrige un archivo CSS para adaptarlo al formato de referencia web.
-
-    Correcciones aplicadas:
-    1. Color #0000 → #000000 (negro visible)
-    2. Font-size en px → em
-    3. Margins/paddings en px → em
-    4. Ajusta text-indent en px → em
-    5. Elimina propiedades de paginación para epub que no aplican en web
-    6. Asegura colores visibles en enlaces e identificadores
-
-    Args:
-        contenido_css: Contenido del archivo CSS original.
-
-    Returns:
-        Contenido CSS corregido.
-    """
     css = contenido_css
 
-    # 1. Corregir colores transparentes → negro
     css = re.sub(r'color:\s*#0000\b', 'color:#000000', css)
     css = re.sub(r'border-color:\s*#0000\b', 'border-color:#000000', css)
     css = re.sub(
@@ -91,7 +52,6 @@ def corregir_css(contenido_css: str) -> str:
         css,
     )
 
-    # 2. Convertir font-size de px a em
     for px_val, em_val in _FONT_SIZE_MAP.items():
         css = re.sub(
             rf'font-size:\s*{re.escape(px_val)}',
@@ -99,7 +59,6 @@ def corregir_css(contenido_css: str) -> str:
             css,
         )
 
-    # 3. Convertir margins de px a em
     def _reemplazar_margin(match: re.Match) -> str:
         prop = match.group(1)
         valor = match.group(2).strip()
@@ -113,83 +72,120 @@ def corregir_css(contenido_css: str) -> str:
         css,
     )
 
-    # 4. Corregir color del identificador a gris visible
     css = re.sub(
         r'(p\.identificador\s*\{[^}]*?)color:\s*#58595b',
         r'\1color:#58595b',
         css,
     )
 
-    # 5. Asegurar que body_text2 tenga estilos adecuados si existe
-    # (para etiquetas tipo "Nota metodológica", "Artículo", etc.)
-
     return css
 
 
 def generar_css_referencia() -> str:
-    """Genera el CSS adicional necesario para replicar el formato de referencia.
-
-    Este CSS complementa al CSS original de InDesign, añadiendo:
-    - Contenedor principal con padding
-    - Responsividad de imágenes
-    - Estilos ORCID
-    - Estilos para notas al pie
-    - Correcciones de layout para web
-
-    Returns:
-        Cadena con las reglas CSS adicionales.
-    """
     return """/* ============================================
    CSS adicional — Formato de referencia RMDE
    (https://revistas.juridicas.unam.mx)
    ============================================ */
 
-/* Contenedor principal */
+/* Contenedor principal responsivo */
 .contenedor {
-    padding: 2em 3.5em 2em 3.5em;
-    max-width: 1000px;
+    position: relative;
+    padding: 3em 5% 2em 5%;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
     margin: 0 auto;
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
 
-/* Imágenes responsivas */
+/* ============================================
+   ALINEACIÓN A LA IZQUIERDA (Títulos y Metadatos)
+   ============================================ */
+h1, h2, h3, h4, h5, h6,
+.tcc-final, .tcc-ingles, .VV, .IA,
+.autor_final_2apellidos, .adscripcion, .pais, .ORCID2,
+p.identificador, p.identificadorfinal, p.notas_iniciales,
+h6.como_citar {
+    text-align: left !important;
+}
+
+/* Imágenes responsivas y a la izquierda */
 img {
     max-width: 100%;
     height: auto;
-    margin-left: auto;
-    margin-right: auto;
+    margin-left: 0 !important;
+    margin-right: auto !important;
     display: block;
 }
 
-/* Centrar imágenes dentro de párrafos */
-p.pp:has(img),
-p.body_text:has(img) {
-    text-align: center;
-    margin-top: 0.5em;
-    margin-bottom: 0.5em;
+/* Resetear alineación de párrafos que solo contienen imágenes */
+p.pp:has(img), p.body_text:has(img) {
+    text-align: left !important;
 }
 
-/* Tablas — espaciado */
-p.pp:has(+ table),
-p.body_text:has(+ table) {
-    text-align: center;
-    margin-top: 0.5em;
-    margin-bottom: 0.5em;
+/* ============================================
+   FORZAR JUSTIFICADO EN TEXTOS BASE (Restaurado)
+   ============================================ */
+p.pp, p.body_text, 
+.resumenfinal, .abstract_final, .palabrasclave, .keywords_final, 
+p.bib, p.recepcion, p.acerca-del-autor, p.publicacion {
+    text-align: justify !important;
+    text-align-last: left !important;
+    hyphens: auto;
+    -webkit-hyphens: auto;
 }
-table + p.pp,
-table + p.body_text {
+
+/* ============================================
+   TABLAS (Formato unificado, mismo tamaño, justificadas)
+   ============================================ */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto; /* Permite scroll horizontal fluido en móviles */
+    -webkit-overflow-scrolling: touch;
     margin-top: 1.5em;
     margin-bottom: 1.5em;
 }
 
-/* Tablas — max-width */
 table {
+    width: 100% !important;
     max-width: 100%;
-    margin-left: auto;
-    margin-right: auto;
+    margin: 0 !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important; /* Libera el ancho apachurrado en PC */
 }
 
-/* Estilos ORCID */
+/* Eliminar anchos fijos de columnas que rompen la vista en PC */
+table col, table colgroup {
+    width: auto !important;
+}
+
+table td, table th {
+    width: auto !important;
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-size: 1em !important; /* Mismo tamaño de letra que el texto base */
+    text-align: justify !important; /* Celdas justificadas */
+    padding: 0.6em !important;
+    white-space: normal !important;
+    word-break: normal !important;
+}
+
+/* Forzar estilos a cualquier elemento dentro de la tabla */
+table p, table span, table div {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-size: 1em !important; 
+    text-align: justify !important; /* Textos justificados */
+    white-space: normal !important;
+    line-height: 1.4 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    text-indent: 0 !important; /* Elimina la sangría dentro de la celda */
+}
+
+/* ============================================
+   OTROS ELEMENTOS Y REFERENCIAS
+   ============================================ */
 .ORCID2 ._idSVGInline {
     display: inline-block;
     width: 1em;
@@ -207,35 +203,31 @@ table {
     margin-bottom: 0.2em !important;
     margin-top: 1.5em !important;
 }
-.ORCID2 + p,
-.ORCID2 + p + p {
+.ORCID2 + p, .ORCID2 + p + p {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
     line-height: 1.4;
 }
 
-/* Notas al pie */
-ol._idFootAndEndNoteOLAttrs,
-ol._listStyleNone {
+ol._idFootAndEndNoteOLAttrs, ol._listStyleNone {
     margin-left: 0 !important;
     padding-left: 0 !important;
     list-style-type: none;
+    text-align: justify !important;
 }
-
 section._idFootnotes {
     margin-top: 2em;
     border-top: 1px solid #ccc;
     padding-top: 1em;
+    text-align: justify !important;
 }
 
-/* Etiqueta flotante (Nota metodológica, Artículo, etc.) */
 .Marco-de-texto-b-sico {
-    position: fixed;
-    top: 80px;
+    position: absolute;
+    top: 0;
     left: 0;
     z-index: 100;
 }
-
 .Marco-de-texto-b-sico p.body_text2 {
     background-color: #386abd;
     color: #ffffff;
@@ -245,9 +237,9 @@ section._idFootnotes {
     font-weight: normal;
     writing-mode: horizontal-tb;
     border-radius: 0 4px 4px 0;
+    margin: 0;
 }
 
-/* Información de la revista (notas iniciales) */
 p.notas_iniciales {
     color: #58595b;
     font-family: Garamond, serif;
@@ -256,106 +248,73 @@ p.notas_iniciales {
     margin-bottom: 2em;
 }
 
-p.notas_iniciales a {
+p.notas_iniciales a, p.notas_iniciales span.hipervinculo {
+    color: #215e9e;
+    text-decoration: underline;
+}
+a {
+    color: #215e9e;
+    text-decoration: none;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+a:hover {
+    text-decoration: underline;
+}
+span.hipervinculo, span.Hiperv-nculo {
     color: #215e9e;
     text-decoration: underline;
 }
 
-/* Separador horizontal antes de notas */
 hr.HorizontalRule-1 {
     border: none;
     border-top: 1px solid #999;
     margin: 2em 0 1em 0;
 }
 
-/* Hipervínculos */
-a {
-    color: #215e9e;
-    text-decoration: none;
-}
-a:hover {
-    text-decoration: underline;
-}
-span.hipervinculo {
-    color: #0645ad;
-}
-span.Hiperv-nculo {
-    color: #215e9e;
-    text-decoration: underline;
-}
-
-/* Línea de separación */
 .no-separar {
-    white-space: nowrap;
+    white-space: normal !important;
 }
 
-/* Versalitas */
-span.Versalitas,
-span.versalita-OT,
-span.VERSALITAS {
+span.Versalitas, span.versalita-OT, span.VERSALITAS, span.Versallitas {
     font-variant: small-caps;
     text-transform: none;
 }
-
-/* Cursivas */
 span.cursivas {
     font-style: italic;
     font-weight: normal;
 }
 
-/* Etiqueta tipo revista */
-p.identificador {
-    color: #58595b;
-    font-size: 0.55em;
-}
-p.identificadorfinal {
-    color: #386abd;
-    font-size: 0.55em;
-    margin-bottom: 1.3em;
+/* Referencias Finales a la izquierda estricto (Como citar) */
+.como_citar_section p, p.APA, p.iijunam, p.rmde {
+    text-align: left !important;
+    text-indent: 0 !important;
+    margin-left: 0 !important;
 }
 
-/* Viewport para responsividad */
 @media (max-width: 768px) {
     .contenedor {
-        padding: 1em 1.5em;
+        padding: 4em 3% 1em 3%;
+    }
+    .Marco-de-texto-b-sico p.body_text2 {
+        font-size: 0.9em;
     }
 }
 """
-
 
 def procesar_css(
     rutas_css_origen: List[str],
     carpeta_css_destino: str,
     nombre_revista: str,
 ) -> List[str]:
-    """Procesa y copia archivos CSS al destino, generando CSS adicional.
-
-    Para cada archivo CSS de origen:
-    1. Lee el contenido
-    2. Aplica correcciones (colores, unidades, etc.)
-    3. Escribe el archivo corregido en la carpeta destino
-
-    Adicionalmente genera un archivo 'referencia.css' con los estilos
-    necesarios para replicar el formato de la página de referencia.
-
-    Args:
-        rutas_css_origen: Lista de rutas a archivos CSS originales.
-        carpeta_css_destino: Carpeta css/ de salida.
-        nombre_revista: Nombre de la revista (para nombres de archivo).
-
-    Returns:
-        Lista de nombres de archivos CSS generados en la carpeta destino.
-    """
     archivos_generados: List[str] = []
 
-    # Copiar y corregir CSS originales
     for ruta_css in rutas_css_origen:
         nombre_archivo = os.path.basename(ruta_css)
         try:
             with open(ruta_css, "r", encoding="utf-8") as f:
                 contenido = f.read()
         except (IOError, UnicodeDecodeError) as e:
-            print(f"    ⚠ No se pudo leer {ruta_css}: {e}")
             continue
 
         contenido_corregido = corregir_css(contenido)
@@ -365,15 +324,11 @@ def procesar_css(
             f.write(contenido_corregido)
 
         archivos_generados.append(nombre_archivo)
-        print(f"    ✓ CSS corregido: {nombre_archivo}")
 
-    # Generar CSS de referencia adicional
     css_referencia = generar_css_referencia()
     ruta_referencia = os.path.join(carpeta_css_destino, "referencia.css")
     with open(ruta_referencia, "w", encoding="utf-8") as f:
         f.write(css_referencia)
 
     archivos_generados.append("referencia.css")
-    print("    ✓ CSS de referencia generado: referencia.css")
-
     return archivos_generados
