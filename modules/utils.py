@@ -150,6 +150,44 @@ def extraer_id_de_carpeta(nombre_carpeta: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def extraer_codigo_seccion(nombre_carpeta: str) -> str:
+    """Extrae el código de sección RMDE desde una carpeta.
+
+    Reglas:
+      - Sin subíndice (ej. 20445_rmde-web-resources) -> art
+      - Con subíndice válido (nm, ej, ar, oe) -> ese código
+      - Si no coincide con el patrón esperado -> art
+    """
+    patron = r"^\d+_rmde(?:_([a-z]{2}))?(?:-web-resources)?$"
+    match = re.match(patron, nombre_carpeta.strip(), flags=re.IGNORECASE)
+    if not match:
+        return "art"
+
+    codigo = match.group(1)
+    if not codigo:
+        return "art"
+
+    codigo = codigo.lower()
+    if codigo in {"nm", "ej", "ar", "oe"}:
+        return codigo
+    return "art"
+
+
+def construir_clave_bitacora(nombre_carpeta: str) -> Optional[str]:
+    """Construye una clave única por revista y sección para bitácora.
+
+    Ejemplos:
+        20445_rmde-web-resources -> 20445:art
+        20460_rmde_nm-web-resources -> 20460:nm
+    """
+    revista_id = extraer_id_de_carpeta(nombre_carpeta)
+    if revista_id is None:
+        return None
+
+    codigo = extraer_codigo_seccion(nombre_carpeta)
+    return f"{revista_id}:{codigo}"
+
+
 def encontrar_html_en_carpeta(carpeta: str) -> Optional[str]:
     """Encuentra el archivo HTML principal dentro de una carpeta de revista.
 

@@ -122,6 +122,18 @@ Para forzar el reprocesamiento de una revista, elimine su ID del archivo `bitaco
 
 ---
 
+## 🧹 Archivos no versionados
+
+El repositorio está configurado para no versionar archivos temporales o generados automáticamente, por ejemplo:
+
+- `Salida/` (resultado de cada ejecución)
+- `bitacora.json` (estado local de procesamiento)
+- `__pycache__/`, `*.pyc` y archivos de sistema como `.DS_Store`
+
+Si desea limpiar la salida local antes de ejecutar nuevamente, puede eliminar el contenido de `Salida/` y reiniciar `bitacora.json`.
+
+---
+
 ## 🔧 Formato de archivos de entrada
 
 ### HTML de entrada

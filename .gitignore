@@ -1,2 +1,17 @@
 /archivos/*
 .venv/
+
+# Salida generada por el procesador
+/Salida/
+
+# Estado temporal de ejecucion
+bitacora.json
+
+# Basura de Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Basura comun de sistema/editor
+.DS_Store
+Thumbs.db

@@ -1,88 +1,60 @@
 #!/usr/bin/env python3
 """
-Gestor principal del Procesador de Revistas Académicas RMDE.
+Gestor principal del procesador de revistas RMDE.
 
-Escanea carpetas en Archivos/, extrae contenido de cada revista,
-reestructura el HTML al formato de referencia de la RMDE, y genera
-la salida en Salida/.
-
-Uso:
-    python main.py
-
-Estructura esperada de Archivos/:
-    Archivos/
-    └── 20462_rmde/
-        ├── css/                         (opcional)
-        ├── image/                       (opcional)
-        ├── 20462_rmde-web-resources/    (carpeta de recursos de InDesign)
-        │   ├── css/
-        │   └── image/
-        ├── 20462_rmde.html
-        └── .DS_Store                    (ignorado)
-
-Salida generada en Salida/:
-    Salida/
-    └── 20462_rmde/
-        ├── index.html
-        ├── css/
-        │   ├── idGeneratedStyles.css    (CSS corregido)
-        │   └── referencia.css           (CSS de referencia adicional)
-        └── images/
-            └── *.png, *.jpg, ...
+Escanea carpetas de entrada, procesa HTML/CSS/imagenes y genera salida.
 """
 
 import os
 import sys
 import time
 
-# Agregar el directorio del proyecto al path
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_DIR)
 
+from Modules.css_processor import procesar_css
+from Modules.sections import obtener_procesador_por_seccion
 from Modules.utils import (
-    leer_bitacora,
-    registrar_en_bitacora,
+    construir_clave_bitacora,
     crear_estructura_salida,
     copiar_imagenes,
-    extraer_id_de_carpeta,
-    encontrar_html_en_carpeta,
     encontrar_css_en_carpeta,
+    encontrar_html_en_carpeta,
+    extraer_codigo_seccion,
+    extraer_id_de_carpeta,
+    leer_bitacora,
+    registrar_en_bitacora,
 )
-from Modules.html_processor import procesar_html
-from Modules.css_processor import procesar_css
 
 
-# ──────────────────────────────────────────────────────────
-#  Configuración
-# ──────────────────────────────────────────────────────────
+def resolver_archivos_dir() -> str:
+    """Resuelve carpeta de entrada con variantes de mayusculas/minusculas."""
+    candidatos = ["Archivos", "archivos"]
+    for nombre in candidatos:
+        ruta = os.path.join(PROJECT_DIR, nombre)
+        if os.path.exists(ruta):
+            return ruta
+    return os.path.join(PROJECT_DIR, "archivos")
 
-ARCHIVOS_DIR = os.path.join(PROJECT_DIR, "Archivos")
+
+ARCHIVOS_DIR = resolver_archivos_dir()
 SALIDA_DIR = os.path.join(PROJECT_DIR, "Salida")
 BITACORA_PATH = os.path.join(PROJECT_DIR, "bitacora.json")
 
 
-# ──────────────────────────────────────────────────────────
-#  Funciones auxiliares
-# ──────────────────────────────────────────────────────────
-
 def imprimir_banner() -> None:
-    """Muestra el banner del proyecto en consola."""
     print("=" * 60)
-    print("  📚 Procesador de Revistas Académicas RMDE")
+    print("  Procesador de Revistas Academicas RMDE")
     print("  Formato de referencia: revistas.juridicas.unam.mx")
     print("=" * 60)
     print()
 
 
 def escanear_carpetas() -> list:
-    """Escanea la carpeta Archivos/ y devuelve las subcarpetas válidas.
-
-    Returns:
-        Lista de tuplas (nombre_carpeta, ruta_completa).
-    """
+    """Escanea carpeta de entrada y devuelve subcarpetas validas."""
     if not os.path.exists(ARCHIVOS_DIR):
         os.makedirs(ARCHIVOS_DIR, exist_ok=True)
-        print(f"  📁 Carpeta Archivos/ creada en: {ARCHIVOS_DIR}")
+        print(f"  Carpeta de entrada creada en: {ARCHIVOS_DIR}")
         return []
 
     carpetas = []
@@ -95,116 +67,98 @@ def escanear_carpetas() -> list:
 
 
 def procesar_revista(nombre: str, ruta: str) -> bool:
-    """Procesa una revista individual.
+    print(f"\n  Procesando: {nombre}")
+    print(f"  {'-' * 50}")
 
-    Args:
-        nombre: Nombre de la carpeta de la revista.
-        ruta: Ruta completa a la carpeta.
-
-    Returns:
-        True si se procesó correctamente, False en caso contrario.
-    """
-    print(f"\n  📖 Procesando: {nombre}")
-    print(f"  {'─' * 50}")
-
-    # 1. Encontrar archivo HTML
     html_path = encontrar_html_en_carpeta(ruta)
     if html_path is None:
-        print(f"    ✗ No se encontró archivo HTML en {nombre}")
+        print(f"    Error: no se encontro archivo HTML en {nombre}")
         return False
-    print(f"    ✓ HTML encontrado: {os.path.basename(html_path)}")
+    print(f"    OK HTML encontrado: {os.path.basename(html_path)}")
 
-    # 2. Encontrar archivos CSS
     css_paths = encontrar_css_en_carpeta(ruta)
     if css_paths:
-        print(f"    ✓ CSS encontrados: {len(css_paths)} archivo(s)")
+        print(f"    OK CSS encontrados: {len(css_paths)} archivo(s)")
     else:
-        print(f"    ⚠ No se encontraron archivos CSS")
+        print("    Aviso: no se encontraron archivos CSS")
 
-    # 3. Crear estructura de salida
     rutas = crear_estructura_salida(SALIDA_DIR, nombre)
-    print(f"    ✓ Estructura de salida creada")
+    print("    OK estructura de salida creada")
 
-    # 4. Copiar y corregir CSS
     archivos_css = procesar_css(css_paths, rutas["css"], nombre)
 
-    # 5. Copiar imágenes
     imagenes = copiar_imagenes(ruta, rutas["images"])
     if imagenes:
-        print(f"    ✓ Imágenes copiadas: {len(imagenes)} archivo(s)")
+        print(f"    OK imagenes copiadas: {len(imagenes)} archivo(s)")
     else:
-        print(f"    ⚠ No se encontraron imágenes")
+        print("    Aviso: no se encontraron imagenes")
 
-    # 6. Procesar HTML
-    exito = procesar_html(
+    codigo_seccion = extraer_codigo_seccion(nombre)
+    procesador_html = obtener_procesador_por_seccion(codigo_seccion)
+
+    return procesador_html(
         html_path=html_path,
         archivos_css=archivos_css,
         ruta_salida_html=rutas["html"],
         nombre_revista=nombre,
     )
 
-    return exito
-
-
-# ──────────────────────────────────────────────────────────
-#  Punto de entrada
-# ──────────────────────────────────────────────────────────
 
 def main() -> None:
-    """Función principal del procesador."""
     inicio = time.time()
     imprimir_banner()
 
-    # Escanear carpetas en Archivos/
     carpetas = escanear_carpetas()
     if not carpetas:
-        print("  ⚠ No se encontraron carpetas de revistas en Archivos/")
-        print(f"    Coloque las carpetas en: {ARCHIVOS_DIR}")
+        print("  Aviso: no se encontraron carpetas de revistas")
+        print(f"  Coloque las carpetas en: {ARCHIVOS_DIR}")
         return
 
-    print(f"  📂 Carpetas encontradas: {len(carpetas)}")
+    print(f"  Carpetas encontradas: {len(carpetas)}")
 
-    # Leer bitácora
     ids_procesados = leer_bitacora(BITACORA_PATH)
     if ids_procesados:
-        print(f"  📋 IDs ya procesados: {', '.join(ids_procesados)}")
+        print(f"  Bitacora cargada: {', '.join(ids_procesados)}")
     else:
-        print(f"  📋 Bitácora vacía — no hay IDs procesados anteriormente")
+        print("  Bitacora vacia")
 
-    # Contadores
     procesadas = 0
     omitidas = 0
     errores = 0
 
     for nombre, ruta in carpetas:
         revista_id = extraer_id_de_carpeta(nombre)
+        clave_bitacora = construir_clave_bitacora(nombre)
 
-        if revista_id is None:
-            print(f"\n  ⚠ No se pudo extraer ID de: {nombre} — Omitiendo")
+        if revista_id is None or clave_bitacora is None:
+            print(f"\n  Aviso: no se pudo extraer ID de {nombre}, se omite")
             errores += 1
             continue
 
-        # Verificar si ya fue procesado
-        if revista_id in ids_procesados:
-            print(f"\n  ⏭  {nombre} (ID: {revista_id}) — Ya procesado, omitiendo")
+        procesada_en_bitacora_nueva = clave_bitacora in ids_procesados
+        procesada_en_bitacora_legacy = (
+            revista_id in ids_procesados and clave_bitacora.endswith(":art")
+        )
+
+        if procesada_en_bitacora_nueva or procesada_en_bitacora_legacy:
+            print(f"\n  Saltando {nombre} (ID: {revista_id}) - ya procesado")
             omitidas += 1
             continue
 
-        # Procesar
         exito = procesar_revista(nombre, ruta)
 
         if exito:
-            registrar_en_bitacora(BITACORA_PATH, revista_id)
+            registrar_en_bitacora(BITACORA_PATH, clave_bitacora)
+            ids_procesados.append(clave_bitacora)
             procesadas += 1
-            print(f"  ✅ {nombre} procesada exitosamente")
+            print(f"  OK {nombre} procesada")
         else:
             errores += 1
-            print(f"  ❌ Error al procesar {nombre}")
+            print(f"  Error al procesar {nombre}")
 
-    # Resumen final
     duracion = time.time() - inicio
     print(f"\n{'=' * 60}")
-    print(f"  📊 Resumen:")
+    print("  Resumen:")
     print(f"     Procesadas:  {procesadas}")
     print(f"     Omitidas:    {omitidas}")
     print(f"     Errores:     {errores}")

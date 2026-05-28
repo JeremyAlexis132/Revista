@@ -59,6 +59,26 @@ def _obtener_html_interno(elemento) -> str:
         return ""
     return "".join(str(child) for child in elemento.children)
 
+
+def _extraer_tipo_desde_marco(soup: BeautifulSoup) -> str:
+    """Obtiene el tipo de documento desde el bloque superior de InDesign."""
+    marco = soup.find("div", class_="Marco-de-texto-b-sico")
+    if not marco:
+        return ""
+
+    # Prioridad al formato más común en artículos.
+    body_text2 = marco.find("p", class_="body_text2")
+    if body_text2:
+        return _limpiar_texto(body_text2)
+
+    # Variantes como notas metodológicas exportan body_text en varias líneas.
+    partes: List[str] = []
+    for p in marco.find_all("p"):
+        texto = _limpiar_texto(p)
+        if texto:
+            partes.append(texto)
+    return " ".join(partes).strip()
+
 def extraer_contenido(html_path: str) -> ContenidoArticulo:
     with open(html_path, "r", encoding="utf-8") as f:
         soup = BeautifulSoup(f.read(), "html.parser")
@@ -68,7 +88,19 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         span.unwrap()
 
     contenido = ContenidoArticulo()
-    container = soup.find("div", class_="_idGenObjectStyleOverride-1")
+
+    # Preferir el contenedor que realmente incluye el titulo del texto.
+    container = None
+    titulo_h1 = soup.find("h1", class_="tcc-final")
+    if titulo_h1 is not None:
+        container = titulo_h1.find_parent("div")
+
+    if container is None:
+        container = soup.find("div", class_="_idGenObjectStyleOverride-2")
+
+    if container is None:
+        container = soup.find("div", class_="_idGenObjectStyleOverride-1")
+
     if container is None:
         container = soup.body
     if container is None:
@@ -76,11 +108,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
 
     elementos = [e for e in container.children if isinstance(e, Tag)]
 
-    marco = soup.find("div", class_="Marco-de-texto-b-sico")
-    if marco:
-        body_text2 = marco.find("p", class_="body_text2")
-        if body_text2:
-            contenido.tipo_articulo = _limpiar_texto(body_text2)
+    contenido.tipo_articulo = _extraer_tipo_desde_marco(soup)
 
     idx = 0
     fase = "identificadores"
@@ -370,9 +398,12 @@ def procesar_html(
     archivos_css: List[str],
     ruta_salida_html: str,
     nombre_revista: str,
+    tipo_articulo_forzado: Optional[str] = None,
 ) -> bool:
     try:
         contenido = extraer_contenido(html_path)
+        if tipo_articulo_forzado and not contenido.tipo_articulo:
+            contenido.tipo_articulo = tipo_articulo_forzado
         html_final = generar_html_referencia(contenido, archivos_css, nombre_revista)
 
         with open(ruta_salida_html, "w", encoding="utf-8") as f:
