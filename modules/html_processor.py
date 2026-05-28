@@ -60,6 +60,25 @@ def _obtener_html_interno(elemento) -> str:
     return "".join(str(child) for child in elemento.children)
 
 
+def _normalizar_html_bloque(html: str) -> str:
+    html = re.sub(r"\s+", " ", html or "")
+    return html.strip()
+
+
+def _deduplicar_bloques_html(bloques: List[str]) -> List[str]:
+    vistos = set()
+    bloques_unicos: List[str] = []
+
+    for bloque in bloques:
+        clave = _normalizar_html_bloque(bloque)
+        if not clave or clave in vistos:
+            continue
+        vistos.add(clave)
+        bloques_unicos.append(bloque)
+
+    return bloques_unicos
+
+
 def _extraer_tipo_desde_marco(soup: BeautifulSoup) -> str:
     """Obtiene el tipo de documento desde el bloque superior de InDesign."""
     marco = soup.find("div", class_="Marco-de-texto-b-sico")
@@ -250,6 +269,10 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             continue
 
         if fase == "como_citar":
+            if elem.name == "hr" and "HorizontalRule-1" in clases:
+                break
+            if elem.name == "section" and "_idFootnotes" in clases:
+                break
             contenido.como_citar.append(str_elem)
             idx += 1
             continue
@@ -258,6 +281,9 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
 
     if autor_actual is not None:
         contenido.autores.append(autor_actual)
+
+    contenido.como_citar = _deduplicar_bloques_html(contenido.como_citar)
+    contenido.acerca_autores = _deduplicar_bloques_html(contenido.acerca_autores)
 
     seccion_notas = soup.find("section", class_="_idFootnotes")
     if seccion_notas:

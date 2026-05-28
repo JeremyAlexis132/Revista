@@ -96,6 +96,8 @@ def generar_css_referencia() -> str:
     box-sizing: border-box;
     margin: 0 auto;
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
+    font-size: 16px;
+    line-height: 1.58;
     overflow-wrap: break-word;
     word-wrap: break-word;
 }
@@ -111,6 +113,15 @@ h6.como_citar {
     text-align: left !important;
 }
 
+h6.como_citar {
+    margin-top: 1.6em;
+    margin-bottom: 0.4em;
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
+    font-size: 1.05em;
+    font-variant: small-caps;
+    font-weight: normal;
+}
+
 /* Imágenes responsivas y a la izquierda */
 img {
     max-width: 100%;
@@ -118,11 +129,24 @@ img {
     margin-left: 0 !important;
     margin-right: auto !important;
     display: block;
+    margin-top: 1.4em;
+    margin-bottom: 1.4em;
+}
+
+/* Dar aire a bloques con imágenes */
+p:has(img), .image-block, figure {
+    margin-top: 1.4em !important;
+    margin-bottom: 1.4em !important;
 }
 
 /* Resetear alineación de párrafos que solo contienen imágenes */
 p.pp:has(img), p.body_text:has(img) {
     text-align: left !important;
+}
+
+table {
+    margin-top: 1.4em !important;
+    margin-bottom: 1.4em !important;
 }
 
 /* ============================================
@@ -144,8 +168,7 @@ p.bib, p.recepcion, p.acerca-del-autor, p.publicacion {
     width: 100%;
     overflow-x: auto; /* Permite scroll horizontal fluido en móviles */
     -webkit-overflow-scrolling: touch;
-    margin-top: 1.5em;
-    margin-bottom: 1.5em;
+    margin: 1.5em 0;
 }
 
 table {
@@ -201,7 +224,75 @@ table p, table span, table div {
 }
 .ORCID2 {
     margin-bottom: 0.2em !important;
-    margin-top: 1.5em !important;
+    margin-top: 1.2em !important;
+}
+
+p.autor_final_2apellidos {
+    margin-top: 1.2em !important;
+    margin-bottom: 0.2em !important;
+    font-size: 1.05em !important;
+    font-variant: small-caps;
+    font-weight: bold;
+}
+
+p.adscripcion {
+    margin-top: 0 !important;
+    margin-bottom: 0.35em !important;
+    font-size: 0.95em !important;
+    line-height: 1.35 !important;
+}
+
+p.pais {
+    margin-top: 0 !important;
+    margin-bottom: 1.2em !important;
+    font-size: 0.95em !important;
+}
+
+p.pais + p.autor_final_2apellidos {
+    margin-top: 1.2em !important;
+}
+
+p.adscripcion + p.autor_final_2apellidos {
+    margin-top: 1.2em !important;
+}
+
+p.autor_final_2apellidos + p.resumenfinal,
+p.adscripcion + p.resumenfinal,
+p.pais + p.resumenfinal {
+    margin-top: 1.2em !important;
+}
+
+.resumenfinal {
+    margin-top: 1.2em !important;
+}
+
+.tcc-final {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
+    font-size: 2em !important;
+    font-weight: bold !important;
+    line-height: 1.22 !important;
+    margin: 0.8em 0 0.15em 0;
+}
+
+.tcc-ingles {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
+    font-size: 1.25em !important;
+    font-style: italic;
+    font-weight: normal;
+    line-height: 1.2;
+    margin: 0 0 1.4em 0;
+}
+
+h3.VV {
+    font-size: 1.35em !important;
+    margin-top: 1.9em;
+    margin-bottom: 1em;
+}
+
+h4.IA {
+    font-size: 1.2em !important;
+    margin-top: 1.2em;
+    margin-bottom: 0.8em;
 }
 .ORCID2 + p, .ORCID2 + p + p {
     margin-top: 0 !important;
@@ -248,9 +339,31 @@ p.notas_iniciales {
     margin-bottom: 2em;
 }
 
+p.notas_final {
+    color: #000000;
+    font-family: Garamond, serif;
+    font-size: 0.9em;
+    line-height: 1.45;
+    margin: 0;
+}
+
 p.notas_iniciales a, p.notas_iniciales span.hipervinculo {
     color: #215e9e;
     text-decoration: underline;
+}
+
+p.notas_final a, p.notas_final span.hipervinculo,
+.como_citar_section a, .como_citar_section span.hipervinculo,
+p.APA a, p.APA span.hipervinculo,
+p.iijunam a, p.iijunam span.hipervinculo,
+p.rmde a, p.rmde span.hipervinculo {
+    color: #215e9e;
+    text-decoration: underline;
+}
+
+.como_citar_section {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
 }
 a {
     color: #215e9e;
@@ -305,7 +418,7 @@ span.cursivas {
 def procesar_css(
     rutas_css_origen: List[str],
     carpeta_css_destino: str,
-    nombre_revista: str,
+    _nombre_revista: str,
 ) -> List[str]:
     archivos_generados: List[str] = []
 
@@ -314,7 +427,7 @@ def procesar_css(
         try:
             with open(ruta_css, "r", encoding="utf-8") as f:
                 contenido = f.read()
-        except (IOError, UnicodeDecodeError) as e:
+        except (IOError, UnicodeDecodeError):
             continue
 
         contenido_corregido = corregir_css(contenido)
