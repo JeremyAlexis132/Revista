@@ -51,8 +51,6 @@ ORCID_SVG = """<span class="_idSVGInline"><svg version="1.1" xmlns="https://lh7-
 <path class="st1" d="M88.7,56.8c0,5.5-4.5,10.1-10.1,10.1c-5.6,0-10.1-4.6-10.1-10.1c0-5.6,4.5-10.1,10.1-10.1C84.2,46.7,88.7,51.3,88.7,56.8z"/>
 </g></svg></span>"""
 
-DOI_SVG = """<span class="_idSVGInline" style="display:inline-block; vertical-align:middle; width:1.1em; height:1.1em; margin-right:0.3em; margin-bottom:0.1em;"><svg viewBox="0 0 136 136" version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M67.9,1.4C31.2,1.4,1.4,31.2,1.4,67.9c0,36.7,29.8,66.5,66.5,66.5c36.7,0,66.5-29.8,66.5-66.5 C134.4,31.2,104.6,1.4,67.9,1.4z" fill="#fbb615"/><path d="M51.1,80.1h-4.3V52.8h11.9c4.2,0,7.3,1,9.3,3.1c1.9,2,2.9,4.9,2.9,8.6c0,2.5-0.5,4.6-1.5,6.5c-1,1.8-2.5,3.3-4.5,4.3 C62.9,76.5,60.5,77.1,57.6,77.1L51.1,80.1z M51.1,76.2h6.2c2.4,0,4.2-0.5,5.4-1.5c1.2-1,1.8-2.6,1.8-4.8c0-2-0.6-3.6-1.8-4.7 c-1.2-1.1-2.9-1.6-5.2-1.6h-6.4V76.2z" fill="#fff"/><path d="M96.4,66.5c0,4.2-1.1,7.5-3.2,10s-5,3.7-8.7,3.7c-3.7,0-6.6-1.2-8.7-3.7c-2.1-2.5-3.2-5.8-3.2-10c0-4.2,1.1-7.5,3.2-10 c2.1-2.5,5-3.7,8.7-3.7c3.7,0,6.6,1.2,8.7,3.7C95.4,59,96.4,62.3,96.4,66.5z M88.1,66.5c0-3.1-0.6-5.4-1.8-6.9c-1.2-1.5-2.7-2.3-4.6-2.3 c-1.9,0-3.5,0.8-4.6,2.3c-1.2,1.5-1.8,3.8-1.8,6.9c0,3.1,0.6,5.4,1.8,6.9c1.2,1.5,2.7,2.3,4.6,2.3c1.9,0,3.5-0.8,4.6-2.3 C87.5,71.9,88.1,69.5,88.1,66.5z" fill="#fff"/><rect x="100.9" y="52.8" width="4.4" height="27.3" fill="#fff"/></svg></span>"""
-
 
 def _limpiar_texto(elemento) -> str:
     if elemento is None:
@@ -166,17 +164,29 @@ def _tiene_orcid_en_bloque(elemento: Tag) -> bool:
     return bool(re.search(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b", elemento.get_text(" ", strip=True)))
 
 
+# --- SOLUCIÓN ACTUALIZADA PARA CAPTURAR A TODOS LOS AUTORES ---
 def _parece_bloque_autor(elemento: Tag) -> bool:
-    clases = _clases_de_elemento(elemento)
-    if any("autor_final_2apellidos" in c for c in clases):
+    if elemento.name != "p":
+        return False
+        
+    clases = [c.lower() for c in _clases_de_elemento(elemento)]
+    
+    # Excluimos explícitamente párrafos de adscripción, país o detalles finales para no confundirlos con nombres
+    if any("adscripcion" in c or "pais" in c or "acerca-del-autor" in c for c in clases):
+        return False
+        
+    # 1. Búsqueda por clase: Atrapa autor_final_2apellidos, autor2, autor, etc. (variantes de InDesign)
+    if any("autor" in c for c in clases):
         return True
 
-    if any(c.startswith("Estilo-de-p-rrafo") for c in clases):
-        for sib in elemento.find_next_siblings(limit=3):
+    # 2. Búsqueda por contexto: Si InDesign le puso un estilo genérico (ParaOverride, Estilo-de-p-rrafo), 
+    # analizamos los elementos hermanos siguientes. Si abajo hay una adscripción, país u ORCID, es el autor.
+    if any(c.startswith("estilo-de-p-rrafo") or c.startswith("paraoverride") for c in clases):
+        for sib in elemento.find_next_siblings(limit=2):
             if not isinstance(sib, Tag):
                 continue
-            clases_sib = _clases_de_elemento(sib)
-            if any("adscripcion" in c for c in clases_sib) or any("pais" in c for c in clases_sib):
+            clases_sib = [c.lower() for c in _clases_de_elemento(sib)]
+            if any("adscripcion" in c or "pais" in c for c in clases_sib):
                 return True
             if _tiene_orcid_en_bloque(sib):
                 return True
@@ -190,7 +200,7 @@ def _extraer_autores_desde_elementos(elementos: List[Tag]) -> List[Autor]:
 
     while idx < len(elementos):
         elem = elementos[idx]
-        clases = " ".join(_clases_de_elemento(elem))
+        clases = " ".join(_clases_de_elemento(elem)).lower()
 
         if "resumenfinal" in clases:
             break
@@ -206,7 +216,7 @@ def _extraer_autores_desde_elementos(elementos: List[Tag]) -> List[Autor]:
         idx += 1
         while idx < len(elementos):
             sib = elementos[idx]
-            clases_sib = " ".join(_clases_de_elemento(sib))
+            clases_sib = " ".join(_clases_de_elemento(sib)).lower()
 
             if "resumenfinal" in clases_sib:
                 break
@@ -302,22 +312,17 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             html_interno = _obtener_html_interno(elem)
             texto_plano = elem.get_text()
             
-            # --- SOLUCIÓN ULTRA ROBUSTA AL BUG DEL DOI ---
-            # Buscamos 'DOI:' en el texto puro para evadir spans rotos de InDesign
             idx_doi = texto_plano.upper().find("DOI:")
             
             if idx_doi != -1:
-                # Extraemos todo lo que hay antes de 'DOI:'
                 prefijo = texto_plano[:idx_doi + 4].strip()
                 
-                # Buscamos el href real (InDesign casi siempre mantiene el href intacto)
                 enlace = elem.find("a")
                 url_doi = None
                 
                 if enlace and enlace.has_attr("href") and ("doi.org" in enlace["href"] or "10." in enlace["href"]):
                     url_doi = enlace["href"].strip()
                 else:
-                    # Si destruyó el <a>, buscamos la URL a la fuerza en el texto sobrante
                     sufijo = texto_plano[idx_doi + 4:]
                     sufijo_limpio = sufijo.replace(" ", "")
                     match = re.search(r'(https?://(?:dx\.)?doi\.org/[^\s]+|10\.\d{4,9}/[-._;()/:A-Z0-9]+)', sufijo_limpio, re.IGNORECASE)
@@ -327,9 +332,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                             url_doi = "https://doi.org/" + url_doi
                 
                 if url_doi:
-                    # Reconstruimos completamente la etiqueta, descartando el HTML roto de InDesign
-                    html_interno = f'{prefijo} {DOI_SVG}<a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
-            # ----------------------------------------------
+                    html_interno = f'{prefijo} <a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
             
             texto_comparacion = texto_plano.replace(" ", "").lower()
             
@@ -585,25 +588,38 @@ def generar_html_referencia(
     cuerpo_html = "\n\t\t\t".join(contenido.secciones_cuerpo)
     referencias_html = "\n\t\t\t".join(contenido.referencias)
 
-    fechas_html_parts = []
-    for i, fecha in enumerate(contenido.fechas):
-        if i == 0:
-            fechas_html_parts.append(f'<p class="recepcion">{fecha}</p>')
-        elif "Aceptación" in fecha or "Aceptado" in fecha:
-            fechas_html_parts.append(f'<p class="acerca-del-autor">{fecha}</p>')
-        else:
-            fechas_html_parts.append(f'<p class="publicacion">{fecha}</p>')
-    fechas_html = "\n\t\t\t".join(fechas_html_parts)
+    bloques_post = []
 
-    acerca_html = "\n\t\t\t".join(contenido.acerca_autores)
-    
-    como_citar_html = ""
+    if contenido.fechas:
+        bloques_post.append('<hr class="HorizontalRule-1" />')
+        for i, fecha in enumerate(contenido.fechas):
+            if i == 0:
+                bloques_post.append(f'<p class="recepcion">{fecha}</p>')
+            elif "Aceptación" in fecha or "Aceptado" in fecha:
+                bloques_post.append(f'<p class="acerca-del-autor">{fecha}</p>')
+            else:
+                bloques_post.append(f'<p class="publicacion">{fecha}</p>')
+        bloques_post.append('<hr class="HorizontalRule-1" />')
+
+    if contenido.acerca_autores:
+        bloques_post.extend(contenido.acerca_autores)
+        
     if contenido.como_citar:
+        if bloques_post and bloques_post[-1] != '<hr class="HorizontalRule-1" />':
+            bloques_post.append('<hr class="HorizontalRule-1" />')
+        elif not bloques_post:
+            bloques_post.append('<hr class="HorizontalRule-1" />')
         citas_unidas = "\n\t\t\t\t".join(contenido.como_citar)
-        como_citar_html = f'<hr class="HorizontalRule-1" />\n\t\t\t<div class="como_citar_section">\n\t\t\t\t{citas_unidas}\n\t\t\t</div>'
+        bloques_post.append(f'<div class="como_citar_section">\n\t\t\t\t{citas_unidas}\n\t\t\t</div>')
 
-    notas_html = contenido.notas_html if contenido.notas_html else ""
-    hr_html = '<hr class="HorizontalRule-1" />' if notas_html else ""
+    if contenido.notas_html:
+        if bloques_post and bloques_post[-1] != '<hr class="HorizontalRule-1" />':
+            bloques_post.append('<hr class="HorizontalRule-1" />')
+        elif not bloques_post:
+            bloques_post.append('<hr class="HorizontalRule-1" />')
+        bloques_post.append(contenido.notas_html)
+
+    post_html = "\n\t\t\t".join(bloques_post)
 
     html = f"""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="es-ES">
@@ -627,11 +643,7 @@ def generar_html_referencia(
 \t\t\t{keywords_html}
 \t\t\t{cuerpo_html}
 \t\t\t{referencias_html}
-\t\t\t{fechas_html}
-\t\t\t{acerca_html}
-\t\t\t{como_citar_html}
-\t\t\t{hr_html}
-\t\t\t{notas_html}
+\t\t\t{post_html}
 \t\t</div>
 \t</div>
 \t</body>
