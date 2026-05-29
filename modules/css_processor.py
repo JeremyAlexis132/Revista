@@ -120,6 +120,8 @@ h6.como_citar {
     font-size: 1.05em;
     font-variant: small-caps;
     font-weight: normal;
+    text-indent: 0 !important;
+    margin-left: 0 !important;
 }
 
 /* Imágenes responsivas y a la izquierda */
@@ -147,6 +149,15 @@ p.pp:has(img), p.body_text:has(img) {
 table {
     margin-top: 1.4em !important;
     margin-bottom: 1.4em !important;
+}
+
+/* Identificadores inyectados para títulos de tablas e imágenes */
+.titulo-tabla-imagen {
+    display: block !important;
+    text-indent: 1.5em !important;
+    margin-top: 2.2em !important;
+    margin-bottom: 0.5em !important;
+    text-align: justify !important;
 }
 
 /* ============================================
@@ -324,19 +335,26 @@ section._idFootnotes {
     color: #ffffff;
     padding: 0.5em 1em;
     font-family: Garamond, serif;
-    font-size: 1.1em;
+    font-size: 1.2em;
     font-weight: normal;
     writing-mode: horizontal-tb;
     border-radius: 0 4px 4px 0;
     margin: 0;
 }
+.Marco-de-texto-b-sico p.body_text2.tipo-no-articulo {
+    font-size: 1.35em;
+}
 
 p.notas_iniciales {
     color: #58595b;
     font-family: Garamond, serif;
-    font-size: 0.9em;
+    font-size: 1em;
     line-height: 1.6;
     margin-bottom: 2em;
+}
+
+span.NOTA, span.NUMERO-NOTA, span._idGenCharOverride-1, span._idGenCharOverride-2 {
+    font-size: 0.85em;
 }
 
 p.notas_final {
@@ -399,7 +417,7 @@ span.cursivas {
 }
 
 /* Referencias Finales a la izquierda estricto (Como citar) */
-.como_citar_section p, p.APA, p.iijunam, p.rmde {
+.como_citar_section, .como_citar_section p, .como_citar_section div, p.APA, p.iijunam, p.rmde {
     text-align: left !important;
     text-indent: 0 !important;
     margin-left: 0 !important;
@@ -410,7 +428,10 @@ span.cursivas {
         padding: 4em 3% 1em 3%;
     }
     .Marco-de-texto-b-sico p.body_text2 {
-        font-size: 0.9em;
+        font-size: 1.05em;
+    }
+    .Marco-de-texto-b-sico p.body_text2.tipo-no-articulo {
+        font-size: 1.15em;
     }
 }
 """

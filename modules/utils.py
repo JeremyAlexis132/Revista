@@ -4,13 +4,15 @@ Módulo de utilidades para el procesador de revistas.
 Incluye funciones para:
 - Lectura/escritura de la bitácora (bitacora.json)
 - Creación de estructura de carpetas de salida
-- Copia de imágenes con corrección de rutas
+- Copia de imágenes con corrección de rutas y sanitización de nombres
 """
 
 import json
 import os
 import shutil
 import re
+import urllib.parse
+import unicodedata
 from pathlib import Path
 from typing import List, Optional
 
@@ -20,14 +22,6 @@ from typing import List, Optional
 # ──────────────────────────────────────────────────────────
 
 def leer_bitacora(ruta_bitacora: str) -> List[str]:
-    """Lee la bitácora JSON y devuelve la lista de IDs ya procesados.
-
-    Args:
-        ruta_bitacora: Ruta absoluta o relativa al archivo bitacora.json.
-
-    Returns:
-        Lista de cadenas con los IDs previamente procesados.
-    """
     if not os.path.exists(ruta_bitacora):
         return []
     try:
@@ -41,12 +35,6 @@ def leer_bitacora(ruta_bitacora: str) -> List[str]:
 
 
 def registrar_en_bitacora(ruta_bitacora: str, revista_id: str) -> None:
-    """Agrega un ID a la bitácora sin borrar los registros anteriores.
-
-    Args:
-        ruta_bitacora: Ruta al archivo bitacora.json.
-        revista_id: ID de la revista procesada (ej. "20462").
-    """
     ids_existentes = leer_bitacora(ruta_bitacora)
     if revista_id not in ids_existentes:
         ids_existentes.append(revista_id)
@@ -59,25 +47,6 @@ def registrar_en_bitacora(ruta_bitacora: str, revista_id: str) -> None:
 # ──────────────────────────────────────────────────────────
 
 def crear_estructura_salida(carpeta_salida: str, nombre_revista: str) -> dict:
-    """Crea la estructura de carpetas de salida para una revista.
-
-    Estructura generada:
-        Salida/<nombre_revista>/
-            ├── index.html
-            ├── css/
-            └── images/
-
-    Args:
-        carpeta_salida: Ruta a la carpeta 'Salida'.
-        nombre_revista: Nombre de la carpeta de la revista (ej. "20462_rmde").
-
-    Returns:
-        Diccionario con las rutas creadas:
-            - 'base': ruta base de la revista
-            - 'css': ruta a la carpeta css/
-            - 'images': ruta a la carpeta images/
-            - 'html': ruta al archivo index.html
-    """
     base = os.path.join(carpeta_salida, nombre_revista)
     css_dir = os.path.join(base, "css")
     images_dir = os.path.join(base, "images")
@@ -94,24 +63,24 @@ def crear_estructura_salida(carpeta_salida: str, nombre_revista: str) -> dict:
 
 
 # ──────────────────────────────────────────────────────────
-#  Imágenes
+#  Imágenes y Sanitización
 # ──────────────────────────────────────────────────────────
 
-def copiar_imagenes(carpeta_origen: str, carpeta_destino: str) -> List[str]:
-    """Copia todas las imágenes encontradas en la carpeta de origen al destino.
-
-    Busca imágenes en:
-      - <carpeta_origen>/image/
-      - <carpeta_origen>/<nombre>-web-resources/image/
-      - Cualquier subcarpeta que contenga archivos de imagen
-
-    Args:
-        carpeta_origen: Carpeta raíz de la revista de entrada.
-        carpeta_destino: Carpeta images/ de salida.
-
-    Returns:
-        Lista de nombres de archivos copiados.
+def sanitizar_nombre_archivo(nombre: str) -> str:
     """
+    Limpia el nombre del archivo: decodifica URLs, quita acentos, 
+    y reemplaza espacios o caracteres raros por guiones bajos.
+    """
+    # 1. Decodificar caracteres URL (ej. %C3%A1 -> á)
+    nombre = urllib.parse.unquote(nombre)
+    # 2. Quitar acentos separando el caracter base de su tilde
+    nombre = unicodedata.normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('utf-8')
+    # 3. Reemplazar todo lo que no sea alfanumérico, punto o guion por un guion bajo
+    nombre = re.sub(r'[^\w\.-]', '_', nombre)
+    return nombre
+
+
+def copiar_imagenes(carpeta_origen: str, carpeta_destino: str) -> List[str]:
     extensiones_img = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp", ".tiff"}
     copiados: List[str] = []
 
@@ -119,45 +88,34 @@ def copiar_imagenes(carpeta_origen: str, carpeta_destino: str) -> List[str]:
         for archivo in files:
             if Path(archivo).suffix.lower() in extensiones_img:
                 origen = os.path.join(root, archivo)
-                destino = os.path.join(carpeta_destino, archivo)
-                # Evitar sobrescribir si ya existe con el mismo nombre
+                
+                # Generamos un nombre seguro para web y editores locales
+                nombre_seguro = sanitizar_nombre_archivo(archivo)
+                destino = os.path.join(carpeta_destino, nombre_seguro)
+                
+                # Evitar sobrescribir si ya existe un archivo con el mismo nombre
                 if os.path.exists(destino):
-                    base, ext = os.path.splitext(archivo)
+                    base, ext = os.path.splitext(nombre_seguro)
                     contador = 1
                     while os.path.exists(destino):
                         destino = os.path.join(carpeta_destino, f"{base}_{contador}{ext}")
                         contador += 1
+                        
                 shutil.copy2(origen, destino)
                 copiados.append(os.path.basename(destino))
 
     return copiados
 
+# ──────────────────────────────────────────────────────────
+#  Identificadores de sección
+# ──────────────────────────────────────────────────────────
 
 def extraer_id_de_carpeta(nombre_carpeta: str) -> Optional[str]:
-    """Extrae el ID numérico del nombre de una carpeta de revista.
-
-    Ejemplos:
-        "20462_rmde" → "20462"
-        "12345_rmde" → "12345"
-
-    Args:
-        nombre_carpeta: Nombre de la carpeta.
-
-    Returns:
-        El ID como cadena, o None si no se pudo extraer.
-    """
     match = re.match(r"^(\d+)", nombre_carpeta)
     return match.group(1) if match else None
 
 
 def extraer_codigo_seccion(nombre_carpeta: str) -> str:
-    """Extrae el código de sección RMDE desde una carpeta.
-
-    Reglas:
-      - Sin subíndice (ej. 20445_rmde-web-resources) -> art
-      - Con subíndice válido (nm, ej, ar, oe) -> ese código
-      - Si no coincide con el patrón esperado -> art
-    """
     patron = r"^\d+_rmde(?:_([a-z]{2}))?(?:-web-resources)?$"
     match = re.match(patron, nombre_carpeta.strip(), flags=re.IGNORECASE)
     if not match:
@@ -174,12 +132,6 @@ def extraer_codigo_seccion(nombre_carpeta: str) -> str:
 
 
 def construir_clave_bitacora(nombre_carpeta: str) -> Optional[str]:
-    """Construye una clave única por revista y sección para bitácora.
-
-    Ejemplos:
-        20445_rmde-web-resources -> 20445:art
-        20460_rmde_nm-web-resources -> 20460:nm
-    """
     revista_id = extraer_id_de_carpeta(nombre_carpeta)
     if revista_id is None:
         return None
@@ -189,16 +141,6 @@ def construir_clave_bitacora(nombre_carpeta: str) -> Optional[str]:
 
 
 def encontrar_html_en_carpeta(carpeta: str) -> Optional[str]:
-    """Encuentra el archivo HTML principal dentro de una carpeta de revista.
-
-    Ignora archivos .DS_Store y busca archivos con extensión .html.
-
-    Args:
-        carpeta: Ruta a la carpeta de la revista.
-
-    Returns:
-        Ruta absoluta al archivo HTML encontrado, o None.
-    """
     for item in os.listdir(carpeta):
         if item.lower().endswith(".html") and not item.startswith("."):
             return os.path.join(carpeta, item)
@@ -206,19 +148,6 @@ def encontrar_html_en_carpeta(carpeta: str) -> Optional[str]:
 
 
 def encontrar_css_en_carpeta(carpeta: str) -> List[str]:
-    """Encuentra todos los archivos CSS en una carpeta de revista.
-
-    Busca en:
-      - <carpeta>/css/
-      - <carpeta>/<nombre>-web-resources/css/
-      - Subcarpetas con archivos .css
-
-    Args:
-        carpeta: Ruta a la carpeta de la revista.
-
-    Returns:
-        Lista de rutas absolutas a archivos CSS.
-    """
     css_files: List[str] = []
     for root, _dirs, files in os.walk(carpeta):
         for archivo in files:

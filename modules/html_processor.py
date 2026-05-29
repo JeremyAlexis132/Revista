@@ -4,6 +4,8 @@ Módulo para extraer y reestructurar HTML de revistas académicas.
 
 import os
 import re
+import urllib.parse
+import unicodedata
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
@@ -80,17 +82,14 @@ def _deduplicar_bloques_html(bloques: List[str]) -> List[str]:
 
 
 def _extraer_tipo_desde_marco(soup: BeautifulSoup) -> str:
-    """Obtiene el tipo de documento desde el bloque superior de InDesign."""
     marco = soup.find("div", class_="Marco-de-texto-b-sico")
     if not marco:
         return ""
 
-    # Prioridad al formato más común en artículos.
     body_text2 = marco.find("p", class_="body_text2")
     if body_text2:
         return _limpiar_texto(body_text2)
 
-    # Variantes como notas metodológicas exportan body_text en varias líneas.
     partes: List[str] = []
     for p in marco.find_all("p"):
         texto = _limpiar_texto(p)
@@ -98,17 +97,35 @@ def _extraer_tipo_desde_marco(soup: BeautifulSoup) -> str:
             partes.append(texto)
     return " ".join(partes).strip()
 
+
+def _normalizar_tipo_articulo(texto: str) -> str:
+    limpio = re.sub(r"\s+", " ", texto or "").strip()
+    if not limpio:
+        return ""
+    clave = limpio.lower().replace(" ", "")
+    reemplazos = {
+        "observatorioelectoral": "Observatorio electoral",
+    }
+    if clave in reemplazos:
+        return reemplazos[clave]
+    return limpio
+
+def _clave_tipo_articulo(texto: str) -> str:
+    limpio = unicodedata.normalize("NFKD", texto or "")
+    limpio = "".join(ch for ch in limpio if not unicodedata.combining(ch))
+    limpio = re.sub(r"\s+", " ", limpio).strip().lower()
+    return limpio
+
+
 def extraer_contenido(html_path: str) -> ContenidoArticulo:
     with open(html_path, "r", encoding="utf-8") as f:
         soup = BeautifulSoup(f.read(), "html.parser")
 
-    # Eliminar spans 'no-separar' para responsividad
     for span in soup.find_all("span", class_="no-separar"):
         span.unwrap()
 
     contenido = ContenidoArticulo()
 
-    # Preferir el contenedor que realmente incluye el titulo del texto.
     container = None
     titulo_h1 = soup.find("h1", class_="tcc-final")
     if titulo_h1 is not None:
@@ -128,6 +145,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     elementos = [e for e in container.children if isinstance(e, Tag)]
 
     contenido.tipo_articulo = _extraer_tipo_desde_marco(soup)
+    contenido.tipo_articulo = _normalizar_tipo_articulo(contenido.tipo_articulo)
 
     idx = 0
     fase = "identificadores"
@@ -137,7 +155,6 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         elem = elementos[idx]
         clases = " ".join(elem.get("class", []))
 
-        # Envolver tablas en div responsivo
         if elem.name == "table":
             str_elem = f'<div class="table-responsive">\n{elem}\n</div>'
         else:
@@ -223,19 +240,33 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                     contenido.secciones_cuerpo.append(str_elem)
                     idx += 1
                     continue
-            if "recepcion" in clases:
+                    
+            texto_limpio = _limpiar_texto(elem)
+            if "recepcion" in clases or texto_limpio.startswith("Recepción:"):
                 fase = "postcontenido"
             else:
+                texto_upper = texto_limpio.upper()
+                if any(texto_upper.startswith(palabra) for palabra in ["TABLA", "GRÁFICA", "GRAFICA", "FIGURA", "IMAGEN", "FUENTE", "NOTA"]):
+                    if isinstance(elem, Tag):
+                        clases_elem = elem.get("class", [])
+                        if isinstance(clases_elem, str):
+                            clases_elem = [clases_elem]
+                        if "titulo-tabla-imagen" not in clases_elem:
+                            clases_elem.append("titulo-tabla-imagen")
+                            elem["class"] = clases_elem
+                            str_elem = str(elem)
+
                 contenido.secciones_cuerpo.append(str_elem)
                 idx += 1
                 continue
 
         if fase == "referencias":
+            texto_limpio = _limpiar_texto(elem)
             if "bib" in clases:
                 contenido.referencias.append(str_elem)
                 idx += 1
                 continue
-            elif "recepcion" in clases:
+            elif "recepcion" in clases or texto_limpio.startswith("Recepción:"):
                 fase = "postcontenido"
             else:
                 contenido.referencias.append(str_elem)
@@ -243,28 +274,26 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 continue
 
         if fase == "postcontenido":
-            if "como_citar" in clases:
+            texto_limpio = _limpiar_texto(elem)
+            if "como_citar" in clases or texto_limpio.upper() == "CÓMO CITAR":
                 fase = "como_citar"
                 contenido.como_citar.append(str_elem)
                 idx += 1
                 continue
-            elif "recepcion" in clases:
+                
+            if "recepcion" in clases or texto_limpio.startswith("Recepción:"):
                 contenido.fechas.append(_obtener_html_interno(elem))
-            elif "publicacion" in clases:
+            elif "publicacion" in clases or texto_limpio.startswith("Publicación:"):
                 contenido.fechas.append(_obtener_html_interno(elem))
-            elif "acerca-del-autor" in clases:
-                texto = _limpiar_texto(elem)
-                if texto.startswith("Aceptación:"):
-                    contenido.fechas.append(_obtener_html_interno(elem))
-                else:
-                    contenido.acerca_autores.append(str_elem)
-            elif "Estilo-de-p-rrafo-6" in clases:
+            elif texto_limpio.startswith("Aceptación:") or texto_limpio.startswith("Aceptado:"):
+                contenido.fechas.append(_obtener_html_interno(elem))
+            elif "acerca-del-autor" in clases or "Estilo-de-p-rrafo-6" in clases:
                 contenido.acerca_autores.append(str_elem)
             elif "iijunam" in clases or "APA" in clases:
                 fase = "como_citar"
                 contenido.como_citar.append(str_elem)
-                idx += 1
-                continue
+            else:
+                pass
             idx += 1
             continue
 
@@ -292,9 +321,20 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     return contenido
 
 def _corregir_rutas_imagenes(html: str) -> str:
+    def reemplazar_y_sanitizar(match):
+        nombre_original = match.group(1)
+        # 1. Decodificar por si InDesign lo exportó como URL
+        nombre = urllib.parse.unquote(nombre_original)
+        # 2. Quitar acentos
+        nombre = unicodedata.normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('utf-8')
+        # 3. Quitar espacios y caracteres raros
+        nombre = re.sub(r'[^\w\.-]', '_', nombre)
+        
+        return f'src="images/{nombre}"'
+
     html = re.sub(
         r'src="[^"]*?(?:web-resources/image/|image/)([^"]+)"',
-        r'src="images/\1"',
+        reemplazar_y_sanitizar,
         html,
     )
     return html
@@ -350,9 +390,12 @@ def generar_html_referencia(
 \t\t</p>"""
 
     tipo_articulo = contenido.tipo_articulo or "Artículo"
+    tipo_clase = ""
+    if _clave_tipo_articulo(tipo_articulo) != "articulo":
+        tipo_clase = " tipo-no-articulo"
     marco_html = f"""
 \t\t\t<div id="_idContainer000" class="Marco-de-texto-b-sico _idGenObjectStyleOverride-1">
-\t\t\t\t<p class="body_text2"><span class="CharOverride-1">{tipo_articulo}</span></p>
+\t\t\t\t<p class="body_text2{tipo_clase}"><span class="CharOverride-1">{tipo_articulo}</span></p>
 \t\t\t</div>"""
 
     autores_html = "\n\t\t\t".join(_generar_bloque_autor(a) for a in contenido.autores)
@@ -367,7 +410,7 @@ def generar_html_referencia(
     for i, fecha in enumerate(contenido.fechas):
         if i == 0:
             fechas_html_parts.append(f'<p class="recepcion">{fecha}</p>')
-        elif "Aceptación" in fecha:
+        elif "Aceptación" in fecha or "Aceptado" in fecha:
             fechas_html_parts.append(f'<p class="acerca-del-autor">{fecha}</p>')
         else:
             fechas_html_parts.append(f'<p class="publicacion">{fecha}</p>')
@@ -378,7 +421,7 @@ def generar_html_referencia(
     como_citar_html = ""
     if contenido.como_citar:
         citas_unidas = "\n\t\t\t\t".join(contenido.como_citar)
-        como_citar_html = f'<div class="como_citar_section">\n\t\t\t\t{citas_unidas}\n\t\t\t</div>'
+        como_citar_html = f'<hr class="HorizontalRule-1" />\n\t\t\t<div class="como_citar_section">\n\t\t\t\t{citas_unidas}\n\t\t\t</div>'
 
     notas_html = contenido.notas_html if contenido.notas_html else ""
     hr_html = '<hr class="HorizontalRule-1" />' if notas_html else ""
@@ -428,8 +471,11 @@ def procesar_html(
 ) -> bool:
     try:
         contenido = extraer_contenido(html_path)
-        if tipo_articulo_forzado and not contenido.tipo_articulo:
-            contenido.tipo_articulo = tipo_articulo_forzado
+        if tipo_articulo_forzado:
+            normalizado = contenido.tipo_articulo.lower().replace(" ", "")
+            forzado = tipo_articulo_forzado.lower().replace(" ", "")
+            if not contenido.tipo_articulo or normalizado == forzado:
+                contenido.tipo_articulo = tipo_articulo_forzado
         html_final = generar_html_referencia(contenido, archivos_css, nombre_revista)
 
         with open(ruta_salida_html, "w", encoding="utf-8") as f:
