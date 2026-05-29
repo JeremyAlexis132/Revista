@@ -333,16 +333,25 @@ section._idFootnotes {
 .Marco-de-texto-b-sico p.body_text2 {
     background-color: #386abd;
     color: #ffffff;
-    padding: 0.5em 1em;
-    font-family: Garamond, serif;
-    font-size: 1.2em;
-    font-weight: normal;
+    padding: 0.6em 1.2em;
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
+    font-size: 1.35em;
+    font-weight: bold;
     writing-mode: horizontal-tb;
     border-radius: 0 4px 4px 0;
     margin: 0;
+    display: inline-block;
 }
+
+/* REGLA AÑADIDA: Fuerza al span a respetar el tamaño grande */
+.Marco-de-texto-b-sico p.body_text2 span {
+    font-size: 1em !important;
+    font-family: inherit !important;
+    letter-spacing: normal !important;
+}
+
 .Marco-de-texto-b-sico p.body_text2.tipo-no-articulo {
-    font-size: 1.35em;
+    font-size: 1.35em; 
 }
 
 p.notas_iniciales {
@@ -428,10 +437,10 @@ span.cursivas {
         padding: 4em 3% 1em 3%;
     }
     .Marco-de-texto-b-sico p.body_text2 {
-        font-size: 1.05em;
+        font-size: 1.2em;
     }
     .Marco-de-texto-b-sico p.body_text2.tipo-no-articulo {
-        font-size: 1.15em;
+        font-size: 1.2em;
     }
 }
 """

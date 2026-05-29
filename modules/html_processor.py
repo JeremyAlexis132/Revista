@@ -51,6 +51,9 @@ ORCID_SVG = """<span class="_idSVGInline"><svg version="1.1" xmlns="https://lh7-
 <path class="st1" d="M88.7,56.8c0,5.5-4.5,10.1-10.1,10.1c-5.6,0-10.1-4.6-10.1-10.1c0-5.6,4.5-10.1,10.1-10.1C84.2,46.7,88.7,51.3,88.7,56.8z"/>
 </g></svg></span>"""
 
+DOI_SVG = """<span class="_idSVGInline" style="display:inline-block; vertical-align:middle; width:1.1em; height:1.1em; margin-right:0.3em; margin-bottom:0.1em;"><svg viewBox="0 0 136 136" version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M67.9,1.4C31.2,1.4,1.4,31.2,1.4,67.9c0,36.7,29.8,66.5,66.5,66.5c36.7,0,66.5-29.8,66.5-66.5 C134.4,31.2,104.6,1.4,67.9,1.4z" fill="#fbb615"/><path d="M51.1,80.1h-4.3V52.8h11.9c4.2,0,7.3,1,9.3,3.1c1.9,2,2.9,4.9,2.9,8.6c0,2.5-0.5,4.6-1.5,6.5c-1,1.8-2.5,3.3-4.5,4.3 C62.9,76.5,60.5,77.1,57.6,77.1L51.1,80.1z M51.1,76.2h6.2c2.4,0,4.2-0.5,5.4-1.5c1.2-1,1.8-2.6,1.8-4.8c0-2-0.6-3.6-1.8-4.7 c-1.2-1.1-2.9-1.6-5.2-1.6h-6.4V76.2z" fill="#fff"/><path d="M96.4,66.5c0,4.2-1.1,7.5-3.2,10s-5,3.7-8.7,3.7c-3.7,0-6.6-1.2-8.7-3.7c-2.1-2.5-3.2-5.8-3.2-10c0-4.2,1.1-7.5,3.2-10 c2.1-2.5,5-3.7,8.7-3.7c3.7,0,6.6,1.2,8.7,3.7C95.4,59,96.4,62.3,96.4,66.5z M88.1,66.5c0-3.1-0.6-5.4-1.8-6.9c-1.2-1.5-2.7-2.3-4.6-2.3 c-1.9,0-3.5,0.8-4.6,2.3c-1.2,1.5-1.8,3.8-1.8,6.9c0,3.1,0.6,5.4,1.8,6.9c1.2,1.5,2.7,2.3,4.6,2.3c1.9,0,3.5-0.8,4.6-2.3 C87.5,71.9,88.1,69.5,88.1,66.5z" fill="#fff"/><rect x="100.9" y="52.8" width="4.4" height="27.3" fill="#fff"/></svg></span>"""
+
+
 def _limpiar_texto(elemento) -> str:
     if elemento is None:
         return ""
@@ -117,6 +120,140 @@ def _clave_tipo_articulo(texto: str) -> str:
     return limpio
 
 
+def _extraer_orcid_desde_elemento(elemento: Optional[Tag]) -> str:
+    if elemento is None:
+        return ""
+
+    enlace = elemento.find("a", href=True)
+    if enlace and "orcid.org" in enlace["href"]:
+        return enlace["href"].strip()
+
+    texto = elemento.get_text(" ", strip=True)
+    match = re.search(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b", texto)
+    if match:
+        return f"https://orcid.org/{match.group(0)}"
+
+    return ""
+
+
+def _limpiar_nombre_autor(elemento: Tag) -> str:
+    copia = BeautifulSoup(str(elemento), "html.parser")
+    contenedor = copia.find("p") or copia
+
+    for link in contenedor.find_all("a", href=True):
+        if "orcid.org" in link["href"]:
+            link.decompose()
+
+    for img in contenedor.find_all("img"):
+        src = img.get("src", "").lower()
+        if "orcid" in src:
+            img.decompose()
+
+    return "".join(str(child) for child in contenedor.children).strip()
+
+
+def _clases_de_elemento(elemento: Tag) -> List[str]:
+    clases = elemento.get("class", [])
+    if isinstance(clases, str):
+        return [clases]
+    return [str(c) for c in clases]
+
+
+def _tiene_orcid_en_bloque(elemento: Tag) -> bool:
+    enlace = elemento.find("a", href=True)
+    if enlace and "orcid.org" in enlace.get("href", ""):
+        return True
+    return bool(re.search(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b", elemento.get_text(" ", strip=True)))
+
+
+def _parece_bloque_autor(elemento: Tag) -> bool:
+    clases = _clases_de_elemento(elemento)
+    if any("autor_final_2apellidos" in c for c in clases):
+        return True
+
+    if any(c.startswith("Estilo-de-p-rrafo") for c in clases):
+        for sib in elemento.find_next_siblings(limit=3):
+            if not isinstance(sib, Tag):
+                continue
+            clases_sib = _clases_de_elemento(sib)
+            if any("adscripcion" in c for c in clases_sib) or any("pais" in c for c in clases_sib):
+                return True
+            if _tiene_orcid_en_bloque(sib):
+                return True
+
+    return False
+
+
+def _extraer_autores_desde_elementos(elementos: List[Tag]) -> List[Autor]:
+    autores: List[Autor] = []
+    idx = 0
+
+    while idx < len(elementos):
+        elem = elementos[idx]
+        clases = " ".join(_clases_de_elemento(elem))
+
+        if "resumenfinal" in clases:
+            break
+
+        if not _parece_bloque_autor(elem):
+            idx += 1
+            continue
+
+        nombre = _limpiar_nombre_autor(elem)
+        orcid = _extraer_orcid_desde_elemento(elem)
+        autor = Autor(nombre=nombre, orcid=orcid)
+
+        idx += 1
+        while idx < len(elementos):
+            sib = elementos[idx]
+            clases_sib = " ".join(_clases_de_elemento(sib))
+
+            if "resumenfinal" in clases_sib:
+                break
+            if _parece_bloque_autor(sib):
+                idx -= 1
+                break
+
+            if "adscripcion" in clases_sib:
+                texto = _limpiar_texto(sib)
+                orcid_en_ads = _extraer_orcid_desde_elemento(sib)
+                if orcid_en_ads and not autor.orcid:
+                    autor.orcid = orcid_en_ads
+                elif texto:
+                    if autor.adscripcion:
+                        autor.adscripcion += " | " + texto
+                    else:
+                        autor.adscripcion = texto
+            elif "pais" in clases_sib:
+                autor.pais = _limpiar_texto(sib)
+
+            idx += 1
+
+        autores.append(autor)
+        idx += 1
+
+    return autores
+
+
+def _extraer_autores_desde_documento(soup: BeautifulSoup) -> List[Autor]:
+    autores: List[Autor] = []
+    container = None
+    titulo_h1 = soup.find("h1", class_="tcc-final")
+    if titulo_h1 is not None:
+        container = titulo_h1.find_parent("div")
+    if container is None:
+        container = soup.find("div", class_="_idGenObjectStyleOverride-2")
+    if container is None:
+        container = soup.find("div", class_="_idGenObjectStyleOverride-1")
+    if container is None:
+        container = soup.body
+    if container is None:
+        return autores
+
+    elementos = [e for e in container.children if isinstance(e, Tag)]
+    return _extraer_autores_desde_elementos(elementos)
+
+
 def extraer_contenido(html_path: str) -> ContenidoArticulo:
     with open(html_path, "r", encoding="utf-8") as f:
         soup = BeautifulSoup(f.read(), "html.parser")
@@ -150,10 +287,11 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     idx = 0
     fase = "identificadores"
     autor_actual: Optional[Autor] = None
+    textos_identificadores_vistos = set()
 
     while idx < len(elementos):
         elem = elementos[idx]
-        clases = " ".join(elem.get("class", []))
+        clases = " ".join(_clases_de_elemento(elem))
 
         if elem.name == "table":
             str_elem = f'<div class="table-responsive">\n{elem}\n</div>'
@@ -161,7 +299,44 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             str_elem = str(elem)
 
         if fase == "identificadores" and ("identificador" in clases):
-            contenido.identificadores.append(_obtener_html_interno(elem))
+            html_interno = _obtener_html_interno(elem)
+            texto_plano = elem.get_text()
+            
+            # --- SOLUCIÓN ULTRA ROBUSTA AL BUG DEL DOI ---
+            # Buscamos 'DOI:' en el texto puro para evadir spans rotos de InDesign
+            idx_doi = texto_plano.upper().find("DOI:")
+            
+            if idx_doi != -1:
+                # Extraemos todo lo que hay antes de 'DOI:'
+                prefijo = texto_plano[:idx_doi + 4].strip()
+                
+                # Buscamos el href real (InDesign casi siempre mantiene el href intacto)
+                enlace = elem.find("a")
+                url_doi = None
+                
+                if enlace and enlace.has_attr("href") and ("doi.org" in enlace["href"] or "10." in enlace["href"]):
+                    url_doi = enlace["href"].strip()
+                else:
+                    # Si destruyó el <a>, buscamos la URL a la fuerza en el texto sobrante
+                    sufijo = texto_plano[idx_doi + 4:]
+                    sufijo_limpio = sufijo.replace(" ", "")
+                    match = re.search(r'(https?://(?:dx\.)?doi\.org/[^\s]+|10\.\d{4,9}/[-._;()/:A-Z0-9]+)', sufijo_limpio, re.IGNORECASE)
+                    if match:
+                        url_doi = match.group(1).rstrip(".,;")
+                        if not url_doi.startswith("http"):
+                            url_doi = "https://doi.org/" + url_doi
+                
+                if url_doi:
+                    # Reconstruimos completamente la etiqueta, descartando el HTML roto de InDesign
+                    html_interno = f'{prefijo} {DOI_SVG}<a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
+            # ----------------------------------------------
+            
+            texto_comparacion = texto_plano.replace(" ", "").lower()
+            
+            if texto_comparacion and texto_comparacion not in textos_identificadores_vistos:
+                contenido.identificadores.append(html_interno)
+                textos_identificadores_vistos.add(texto_comparacion)
+                
             idx += 1
             continue
 
@@ -177,10 +352,12 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             idx += 1
             continue
 
-        if "autor_final_2apellidos" in clases:
+        if _parece_bloque_autor(elem):
             if autor_actual is not None:
                 contenido.autores.append(autor_actual)
-            autor_actual = Autor(nombre=_obtener_html_interno(elem))
+            nombre_autor = _limpiar_nombre_autor(elem)
+            orcid_autor = _extraer_orcid_desde_elemento(elem)
+            autor_actual = Autor(nombre=nombre_autor, orcid=orcid_autor)
             fase = "autor_detalles"
             idx += 1
             continue
@@ -188,10 +365,10 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         if fase == "autor_detalles":
             if "adscripcion" in clases:
                 texto = _limpiar_texto(elem)
-                enlace = elem.find("a")
-                if enlace and "orcid.org" in (enlace.get("href", "") or ""):
-                    if autor_actual:
-                        autor_actual.orcid = enlace.get("href", "")
+                enlace_orcid = _extraer_orcid_desde_elemento(elem)
+                if enlace_orcid:
+                    if autor_actual and not autor_actual.orcid:
+                        autor_actual.orcid = enlace_orcid
                 else:
                     if autor_actual:
                         if autor_actual.adscripcion:
@@ -311,6 +488,10 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     if autor_actual is not None:
         contenido.autores.append(autor_actual)
 
+    autores_en_doc = _extraer_autores_desde_documento(soup)
+    if len(autores_en_doc) > len(contenido.autores):
+        contenido.autores = autores_en_doc
+
     contenido.como_citar = _deduplicar_bloques_html(contenido.como_citar)
     contenido.acerca_autores = _deduplicar_bloques_html(contenido.acerca_autores)
 
@@ -323,11 +504,8 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
 def _corregir_rutas_imagenes(html: str) -> str:
     def reemplazar_y_sanitizar(match):
         nombre_original = match.group(1)
-        # 1. Decodificar por si InDesign lo exportó como URL
         nombre = urllib.parse.unquote(nombre_original)
-        # 2. Quitar acentos
         nombre = unicodedata.normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('utf-8')
-        # 3. Quitar espacios y caracteres raros
         nombre = re.sub(r'[^\w\.-]', '_', nombre)
         
         return f'src="images/{nombre}"'
@@ -393,9 +571,10 @@ def generar_html_referencia(
     tipo_clase = ""
     if _clave_tipo_articulo(tipo_articulo) != "articulo":
         tipo_clase = " tipo-no-articulo"
+        
     marco_html = f"""
 \t\t\t<div id="_idContainer000" class="Marco-de-texto-b-sico _idGenObjectStyleOverride-1">
-\t\t\t\t<p class="body_text2{tipo_clase}"><span class="CharOverride-1">{tipo_articulo}</span></p>
+\t\t\t\t<p class="body_text2{tipo_clase}"><span>{tipo_articulo}</span></p>
 \t\t\t</div>"""
 
     autores_html = "\n\t\t\t".join(_generar_bloque_autor(a) for a in contenido.autores)
