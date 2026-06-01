@@ -1,10 +1,10 @@
-# 📚 Procesador de Revistas Académicas RMDE
+# Procesador de Revistas Academicas RMDE
 
 Proyecto Python para procesar archivos HTML de revistas académicas exportados desde InDesign, reestructurándolos completamente al formato visual de la **Revista Mexicana de Derecho Electoral (RMDE)** publicada en [revistas.juridicas.unam.mx](https://revistas.juridicas.unam.mx/index.php/derecho-electoral/).
 
 ---
 
-## 📁 Estructura del proyecto
+## Estructura del proyecto
 
 ```
 revista_processor/
@@ -38,7 +38,7 @@ revista_processor/
 
 ---
 
-## ⚙️ Instalación
+## Instalacion
 
 ### Requisitos
 
@@ -57,7 +57,7 @@ pip install -r requirements.txt
 
 ---
 
-## 🚀 Uso
+## Uso
 
 ### 1. Preparar archivos de entrada
 
@@ -102,7 +102,7 @@ Salida/
 
 ---
 
-## 📋 Bitácora de procesamiento
+## Bitacora de procesamiento
 
 El archivo `bitacora.json` mantiene un registro de los IDs de revistas ya procesadas. Esto permite:
 
@@ -122,7 +122,7 @@ Para forzar el reprocesamiento de una revista, elimine su ID del archivo `bitaco
 
 ---
 
-## 🧹 Archivos no versionados
+## Archivos no versionados
 
 El repositorio está configurado para no versionar archivos temporales o generados automáticamente, por ejemplo:
 
@@ -134,7 +134,7 @@ Si desea limpiar la salida local antes de ejecutar nuevamente, puede eliminar el
 
 ---
 
-## 🔧 Formato de archivos de entrada
+## Formato de archivos de entrada
 
 ### HTML de entrada
 
@@ -170,7 +170,7 @@ El CSS de InDesign usa valores absolutos (px) y colores transparentes (`#0000`) 
 
 ---
 
-## 📐 Formato de referencia
+## Formato de referencia
 
 El HTML generado replica la estructura visual de la página:
 
@@ -194,7 +194,7 @@ El HTML generado replica la estructura visual de la página:
 
 ---
 
-## 🐛 Solución de problemas
+## Solucion de problemas
 
 | Problema | Solución |
 |---|---|
@@ -205,6 +205,6 @@ El HTML generado replica la estructura visual de la página:
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 Proyecto interno para procesamiento de revistas académicas del IIJ-UNAM.

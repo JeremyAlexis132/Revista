@@ -39,6 +39,7 @@ class ContenidoArticulo:
     fechas: List[str] = field(default_factory=list)
     acerca_autores: List[str] = field(default_factory=list)
     como_citar: List[str] = field(default_factory=list)
+    otros_postcontenido: List[str] = field(default_factory=list)
     notas_html: str = ""
     cuerpo_html_crudo: str = ""
 
@@ -80,6 +81,95 @@ def _deduplicar_bloques_html(bloques: List[str]) -> List[str]:
         bloques_unicos.append(bloque)
 
     return bloques_unicos
+
+
+def _es_otros_postcontenido(texto: str) -> bool:
+    if not texto:
+        return False
+    texto_upper = texto.upper()
+    kws = (
+        "FUNDING STATEMENT", "CONFLICTS OF INTEREST", "CONFLICTO DE INTERÉS", 
+        "CONFLICTO DE INTERES", "FINANCIAMIENTO", "AGRADECIMIENTO", 
+        "DECLARACIÓN", "DECLARACION", "DATA AVAILABILITY", "FUNDING",
+        "ANEXO", "ANEXOS", "APPENDIX", "APPENDICES", "APÉNDICE", "APÉNDICES",
+        "APENDICE", "APENDICES"
+    )
+    return any(texto_upper.startswith(kw) for kw in kws)
+
+
+def _es_acerca_de_autor(texto: str, clases: str) -> bool:
+    clases_lower = clases.lower()
+    if "acerca-del-autor" in clases_lower or "estilo-de-p-rrafo-6" in clases_lower:
+        return True
+    texto_lower = texto.lower()
+    if "correo electrónico:" in texto_lower or "email:" in texto_lower:
+        return True
+    return False
+
+
+def _extraer_url_doi(texto: str) -> str:
+    if not texto:
+        return ""
+    texto_limpio = texto.replace(" ", "")
+    match = re.search(
+        r"(https?://(?:dx\.)?doi\.org/[^\s]+|10\.\d{4,9}/[-._;()/:A-Z0-9]+)",
+        texto_limpio,
+        re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    url = match.group(1).rstrip(".,;")
+    if not url.startswith("http"):
+        url = "https://doi.org/" + url
+    return url
+
+
+def _normalizar_identificador_html(elemento: Tag, texto_plano: str) -> str:
+    clases = " ".join(_clases_de_elemento(elemento)).lower()
+
+    if "identificadorfinal" in clases:
+        return texto_plano
+
+    if "creative commons" in (texto_plano or "").lower():
+        cc_url = "https://creativecommons.org/licenses/by/4.0/"
+        match = re.search(
+            r"^(.*?)(Licencia\s+Creative\s+Commons[^.]*)(\.?$)",
+            texto_plano.strip(),
+            re.IGNORECASE,
+        )
+        if match:
+            prefijo = match.group(1).strip()
+            licencia = match.group(2).strip()
+            if prefijo:
+                return f'{prefijo} <a href="{cc_url}"><span class="hipervinculo">{licencia}</span></a>'
+            return f'<a href="{cc_url}"><span class="hipervinculo">{licencia}</span></a>'
+
+    if "doi" in (texto_plano or "").lower():
+        url_doi = ""
+        url_doi_texto = _extraer_url_doi(texto_plano)
+        enlace = elemento.find("a", href=True)
+        if enlace and enlace.get("href"):
+            href = enlace["href"].strip()
+            if "doi.org" in href or "10." in href:
+                url_doi = href
+        if url_doi_texto and (not url_doi or url_doi.lower() != url_doi_texto.lower()):
+            url_doi = url_doi_texto
+        elif not url_doi:
+            url_doi = url_doi_texto
+        if url_doi:
+            prefijo = texto_plano
+            match = re.search(r"\bDOI\s*:\s*", texto_plano, re.IGNORECASE)
+            if match:
+                prefijo = texto_plano[:match.end()].strip()
+            else:
+                prefijo = texto_plano.replace(url_doi, "").strip()
+                if prefijo.endswith(":"):
+                    prefijo = prefijo.rstrip()
+            if prefijo:
+                return f'{prefijo} <a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
+            return f'<a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
+
+    return _obtener_html_interno(elemento)
 
 
 def _extraer_tipo_desde_marco(soup: BeautifulSoup) -> str:
@@ -164,23 +254,18 @@ def _tiene_orcid_en_bloque(elemento: Tag) -> bool:
     return bool(re.search(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b", elemento.get_text(" ", strip=True)))
 
 
-# --- SOLUCIÓN ACTUALIZADA PARA CAPTURAR A TODOS LOS AUTORES ---
 def _parece_bloque_autor(elemento: Tag) -> bool:
     if elemento.name != "p":
         return False
         
     clases = [c.lower() for c in _clases_de_elemento(elemento)]
     
-    # Excluimos explícitamente párrafos de adscripción, país o detalles finales para no confundirlos con nombres
     if any("adscripcion" in c or "pais" in c or "acerca-del-autor" in c for c in clases):
         return False
         
-    # 1. Búsqueda por clase: Atrapa autor_final_2apellidos, autor2, autor, etc. (variantes de InDesign)
     if any("autor" in c for c in clases):
         return True
 
-    # 2. Búsqueda por contexto: Si InDesign le puso un estilo genérico (ParaOverride, Estilo-de-p-rrafo), 
-    # analizamos los elementos hermanos siguientes. Si abajo hay una adscripción, país u ORCID, es el autor.
     if any(c.startswith("estilo-de-p-rrafo") or c.startswith("paraoverride") for c in clases):
         for sib in elemento.find_next_siblings(limit=2):
             if not isinstance(sib, Tag):
@@ -231,7 +316,8 @@ def _extraer_autores_desde_elementos(elementos: List[Tag]) -> List[Autor]:
                     autor.orcid = orcid_en_ads
                 elif texto:
                     if autor.adscripcion:
-                        autor.adscripcion += " | " + texto
+                        separador = " | " if "|" in autor.adscripcion or "|" in texto else "\n"
+                        autor.adscripcion += separador + texto
                     else:
                         autor.adscripcion = texto
             elif "pais" in clases_sib:
@@ -309,30 +395,8 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             str_elem = str(elem)
 
         if fase == "identificadores" and ("identificador" in clases):
-            html_interno = _obtener_html_interno(elem)
-            texto_plano = elem.get_text()
-            
-            idx_doi = texto_plano.upper().find("DOI:")
-            
-            if idx_doi != -1:
-                prefijo = texto_plano[:idx_doi + 4].strip()
-                
-                enlace = elem.find("a")
-                url_doi = None
-                
-                if enlace and enlace.has_attr("href") and ("doi.org" in enlace["href"] or "10." in enlace["href"]):
-                    url_doi = enlace["href"].strip()
-                else:
-                    sufijo = texto_plano[idx_doi + 4:]
-                    sufijo_limpio = sufijo.replace(" ", "")
-                    match = re.search(r'(https?://(?:dx\.)?doi\.org/[^\s]+|10\.\d{4,9}/[-._;()/:A-Z0-9]+)', sufijo_limpio, re.IGNORECASE)
-                    if match:
-                        url_doi = match.group(1).rstrip(".,;")
-                        if not url_doi.startswith("http"):
-                            url_doi = "https://doi.org/" + url_doi
-                
-                if url_doi:
-                    html_interno = f'{prefijo} <a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
+            texto_plano = elem.get_text(" ", strip=True)
+            html_interno = _normalizar_identificador_html(elem, texto_plano)
             
             texto_comparacion = texto_plano.replace(" ", "").lower()
             
@@ -375,7 +439,8 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 else:
                     if autor_actual:
                         if autor_actual.adscripcion:
-                            autor_actual.adscripcion += " | " + texto
+                            separador = " | " if "|" in autor_actual.adscripcion or "|" in texto else "\n"
+                            autor_actual.adscripcion += separador + texto
                         else:
                             autor_actual.adscripcion = texto
                 idx += 1
@@ -422,7 +487,8 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                     continue
                     
             texto_limpio = _limpiar_texto(elem)
-            if "recepcion" in clases or texto_limpio.startswith("Recepción:"):
+            
+            if "recepcion" in clases or texto_limpio.startswith("Recepción:") or _es_otros_postcontenido(texto_limpio) or _es_acerca_de_autor(texto_limpio, clases):
                 fase = "postcontenido"
             else:
                 texto_upper = texto_limpio.upper()
@@ -442,11 +508,14 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
 
         if fase == "referencias":
             texto_limpio = _limpiar_texto(elem)
-            if "bib" in clases:
+            es_otros = _es_otros_postcontenido(texto_limpio)
+            es_acerca_de_autor = _es_acerca_de_autor(texto_limpio, clases)
+            
+            if "bib" in clases and not es_otros and not es_acerca_de_autor:
                 contenido.referencias.append(str_elem)
                 idx += 1
                 continue
-            elif "recepcion" in clases or texto_limpio.startswith("Recepción:"):
+            elif "recepcion" in clases or texto_limpio.startswith("Recepción:") or es_otros or es_acerca_de_autor or elem.name == "hr":
                 fase = "postcontenido"
             else:
                 contenido.referencias.append(str_elem)
@@ -455,6 +524,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
 
         if fase == "postcontenido":
             texto_limpio = _limpiar_texto(elem)
+            
             if "como_citar" in clases or texto_limpio.upper() == "CÓMO CITAR":
                 fase = "como_citar"
                 contenido.como_citar.append(str_elem)
@@ -467,13 +537,33 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 contenido.fechas.append(_obtener_html_interno(elem))
             elif texto_limpio.startswith("Aceptación:") or texto_limpio.startswith("Aceptado:"):
                 contenido.fechas.append(_obtener_html_interno(elem))
-            elif "acerca-del-autor" in clases or "Estilo-de-p-rrafo-6" in clases:
+            elif _es_acerca_de_autor(texto_limpio, clases):
+                if isinstance(elem, Tag):
+                    clases_elem = elem.get("class", [])
+                    if isinstance(clases_elem, str):
+                        clases_elem = [clases_elem]
+                    clases_limpias = [c for c in clases_elem if c.lower() not in ["body_text", "paraoverride-1", "paraoverride-2"]]
+                    if "acerca-del-autor" not in clases_limpias:
+                        clases_limpias.append("acerca-del-autor")
+                    elem["class"] = clases_limpias
+                    str_elem = str(elem)
                 contenido.acerca_autores.append(str_elem)
             elif "iijunam" in clases or "APA" in clases:
                 fase = "como_citar"
                 contenido.como_citar.append(str_elem)
             else:
-                pass
+                if elem.name not in ["hr", "section"]:
+                    texto_upper = texto_limpio.upper()
+                    if any(texto_upper.startswith(palabra) for palabra in ["TABLA", "GRÁFICA", "GRAFICA", "FIGURA", "IMAGEN", "FUENTE", "NOTA"]):
+                        if isinstance(elem, Tag):
+                            clases_elem = elem.get("class", [])
+                            if isinstance(clases_elem, str):
+                                clases_elem = [clases_elem]
+                            if "titulo-tabla-imagen" not in clases_elem:
+                                clases_elem.append("titulo-tabla-imagen")
+                                elem["class"] = clases_elem
+                                str_elem = str(elem)
+                    contenido.otros_postcontenido.append(str_elem)
             idx += 1
             continue
 
@@ -542,7 +632,12 @@ def _generar_bloque_autor(autor: Autor) -> str:
         f'{autor.nombre}{orcid_html}</p>'
     )
     if autor.adscripcion:
-        lineas.append(f'<p class="adscripcion">{autor.adscripcion}</p>')
+        if "\n" in autor.adscripcion:
+            for linea in (parte.strip() for parte in autor.adscripcion.split("\n")):
+                if linea:
+                    lineas.append(f'<p class="adscripcion">{linea}</p>')
+        else:
+            lineas.append(f'<p class="adscripcion">{autor.adscripcion}</p>')
     if autor.pais:
         lineas.append(f'<p class="pais">{autor.pais}</p>')
     return "\n\t\t\t".join(lineas)
@@ -558,6 +653,7 @@ def generar_html_referencia(
     css_links_str = "\n".join(css_links)
 
     identificadores_html = ""
+    separador_identificadores = ""
     if contenido.identificadores:
         id_lines = []
         for i, ident in enumerate(contenido.identificadores):
@@ -569,6 +665,7 @@ def generar_html_referencia(
 \t\t<p class="notas_iniciales">\t
 \t\t\t{''.join(id_lines)}
 \t\t</p>"""
+        separador_identificadores = '\n\t\t<hr class="HorizontalRule-1" />'
 
     tipo_articulo = contenido.tipo_articulo or "Artículo"
     tipo_clase = ""
@@ -590,36 +687,67 @@ def generar_html_referencia(
 
     bloques_post = []
 
+    # Filtrar bloques de "otros contenidos" para descartar elementos vacíos basura de InDesign
+    if contenido.otros_postcontenido:
+        otros_validos = []
+        for html_chunk in contenido.otros_postcontenido:
+            soup_chunk = BeautifulSoup(html_chunk, "html.parser")
+            texto_plano = soup_chunk.get_text().replace('\xa0', '').replace('\u200b', '').strip()
+            if texto_plano or soup_chunk.find(["img", "svg", "table"]):
+                otros_validos.append(html_chunk)
+        if otros_validos:
+            bloques_post.extend(otros_validos)
+
+    # REGLA APLICADA: Unificar las fechas en un mismo bloque utilizando saltos de línea suaves (<br>)
     if contenido.fechas:
-        bloques_post.append('<hr class="HorizontalRule-1" />')
-        for i, fecha in enumerate(contenido.fechas):
-            if i == 0:
-                bloques_post.append(f'<p class="recepcion">{fecha}</p>')
-            elif "Aceptación" in fecha or "Aceptado" in fecha:
-                bloques_post.append(f'<p class="acerca-del-autor">{fecha}</p>')
-            else:
-                bloques_post.append(f'<p class="publicacion">{fecha}</p>')
-        bloques_post.append('<hr class="HorizontalRule-1" />')
+        fechas_validas = []
+        for fecha in contenido.fechas:
+            # Limpiar etiquetas y espacios invisibles que causaban los "huecos"
+            texto_plano = BeautifulSoup(fecha, "html.parser").get_text().replace('\xa0', '').replace('\u200b', '').strip()
+            if texto_plano:
+                fechas_validas.append(fecha)
+        
+        if fechas_validas:
+            if not bloques_post or bloques_post[-1] != '<hr class="HorizontalRule-1" />':
+                bloques_post.append('<hr class="HorizontalRule-1" />')
+            # Unir las fechas puras para garantizar 0 margen extra y total uniformidad
+            fechas_unidas = "<br>\n\t\t\t\t".join(fechas_validas)
+            bloques_post.append(f'<p class="recepcion">{fechas_unidas}</p>')
+            bloques_post.append('<hr class="HorizontalRule-1" />')
 
     if contenido.acerca_autores:
-        bloques_post.extend(contenido.acerca_autores)
+        autores_validos = []
+        for autor_html in contenido.acerca_autores:
+            texto_plano = BeautifulSoup(autor_html, "html.parser").get_text().replace('\xa0', '').replace('\u200b', '').strip()
+            if texto_plano:
+                autores_validos.append(autor_html)
+        if autores_validos:
+            if not bloques_post or bloques_post[-1] != '<hr class="HorizontalRule-1" />':
+                bloques_post.append('<hr class="HorizontalRule-1" />')
+            bloques_post.extend(autores_validos)
         
     if contenido.como_citar:
-        if bloques_post and bloques_post[-1] != '<hr class="HorizontalRule-1" />':
-            bloques_post.append('<hr class="HorizontalRule-1" />')
-        elif not bloques_post:
-            bloques_post.append('<hr class="HorizontalRule-1" />')
-        citas_unidas = "\n\t\t\t\t".join(contenido.como_citar)
-        bloques_post.append(f'<div class="como_citar_section">\n\t\t\t\t{citas_unidas}\n\t\t\t</div>')
+        citas_validas = []
+        for cita_html in contenido.como_citar:
+            texto_plano = BeautifulSoup(cita_html, "html.parser").get_text().replace('\xa0', '').replace('\u200b', '').strip()
+            if texto_plano:
+                citas_validas.append(cita_html)
+        if citas_validas:
+            if not bloques_post or bloques_post[-1] != '<hr class="HorizontalRule-1" />':
+                bloques_post.append('<hr class="HorizontalRule-1" />')
+            citas_unidas = "\n\t\t\t\t".join(citas_validas)
+            bloques_post.append(f'<div class="como_citar_section">\n\t\t\t\t{citas_unidas}\n\t\t\t</div>')
 
     if contenido.notas_html:
-        if bloques_post and bloques_post[-1] != '<hr class="HorizontalRule-1" />':
-            bloques_post.append('<hr class="HorizontalRule-1" />')
-        elif not bloques_post:
+        if not bloques_post or bloques_post[-1] != '<hr class="HorizontalRule-1" />':
             bloques_post.append('<hr class="HorizontalRule-1" />')
         bloques_post.append(contenido.notas_html)
 
     post_html = "\n\t\t\t".join(bloques_post)
+    separador_referencias = ""
+    if post_html and (referencias_html or cuerpo_html):
+        if not post_html.lstrip().startswith("<hr"):
+            separador_referencias = "\n\t\t\t<hr class=\"HorizontalRule-1\" />"
 
     html = f"""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="es-ES">
@@ -632,7 +760,7 @@ def generar_html_referencia(
 \t<body id="x{nombre_revista}">
 \t\t<div class="contenedor">
 {marco_html}
-{identificadores_html}
+{identificadores_html}{separador_identificadores}
 \t\t<div id="_idContainer003" class="_idGenObjectStyleOverride-2">
 \t\t\t<h1 class="tcc-final">{contenido.titulo_es}</h1>
 \t\t\t<h2 class="tcc-ingles" lang="en-US">{contenido.titulo_en}</h2>
@@ -642,7 +770,7 @@ def generar_html_referencia(
 \t\t\t{abstract_html}
 \t\t\t{keywords_html}
 \t\t\t{cuerpo_html}
-\t\t\t{referencias_html}
+\t\t\t{referencias_html}{separador_referencias}
 \t\t\t{post_html}
 \t\t</div>
 \t</div>

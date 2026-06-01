@@ -4,6 +4,11 @@
 # Salida generada por el procesador
 /Salida/
 
+# Build de ejecutables
+/build/
+/dist/
+*.spec
+
 # Estado temporal de ejecucion
 bitacora.json
 /bitacora.json
