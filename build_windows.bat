@@ -1,46 +1,46 @@
 @echo off
-setlocal
+title Construyendo Procesador RMDE para Windows
+echo ========================================================
+echo Iniciando compilacion de la aplicacion para Windows...
+echo ========================================================
 
-set "PYTHON_EXE="
-
-python3 --version >nul 2>&1
-if %errorlevel%==0 (
-    set "PYTHON_EXE=python3"
-) else (
-    python --version >nul 2>&1
-    if %errorlevel%==0 (
-        set "PYTHON_EXE=python"
+echo.
+echo [0/3] Buscando Python 3 en el sistema...
+:: Intentamos detectar python3 directamente
+set PYTHON_CMD=python3
+%PYTHON_CMD% --version >nul 2>&1
+if %errorlevel% neq 0 (
+    :: Si falla, intentamos usar el lanzador moderno de Windows
+    set PYTHON_CMD=py -3
+    %PYTHON_CMD% --version >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo ERROR FATAL: No se pudo encontrar Python 3 en este equipo.
+        echo Asegurate de tener Python 3 instalado y agregado al PATH.
+        pause
+        exit /b
     )
 )
 
-if "%PYTHON_EXE%"=="" (
-    echo No se encontro Python 3.12 o superior en PATH.
-    echo Instala Python 3.12+ y asegurate de que python3 o python este en PATH.
-    pause
-    exit /b 1
-)
+echo Detectado con exito. Usando comando: %PYTHON_CMD%
 
-for /f "tokens=2 delims= " %%v in ('%PYTHON_EXE% --version') do set "PYVER=%%v"
-for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do (
-    set "MAJOR=%%a"
-    set "MINOR=%%b"
-)
+echo.
+echo [1/3] Instalando dependencias...
+:: Usamos "-m pip" para asegurar que el pip pertenezca a Python 3 y no al viejo Python 2.7
+%PYTHON_CMD% -m pip install -r requirements.txt
+%PYTHON_CMD% -m pip install pyinstaller PySide6 Pillow
 
-if not "%MAJOR%"=="3" (
-    echo Se requiere Python 3.12 o superior. Version actual: %PYVER%
-    pause
-    exit /b 1
-)
+echo.
+echo [2/3] Generando el ejecutable (.exe)...
+:: Ejecutamos PyInstaller como modulo directamente desde Python 3
+%PYTHON_CMD% -m PyInstaller --noconsole --onefile --icon=icono.ico --name "Formato Revistas" desktop_app.py
+echo.
+echo [3/3] Limpiando archivos temporales de compilacion...
+rmdir /s /q build
+del /q desktop_app.spec
 
-if %MINOR% LSS 12 (
-    echo Se requiere Python 3.12 o superior. Version actual: %PYVER%
-    pause
-    exit /b 1
-)
-
-%PYTHON_EXE% -m pip install --upgrade pip
-%PYTHON_EXE% -m pip install -r requirements.txt
-
-%PYTHON_EXE% -m PyInstaller --clean --noconfirm --name "ProcesadorRMDE" --windowed desktop_app.py
-
-endlocal
+echo.
+echo ========================================================
+echo COMPILACION TERMINADA CON EXITO.
+echo Tu aplicacion esta en la carpeta "dist".
+echo ========================================================
+pause

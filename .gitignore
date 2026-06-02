@@ -1,4 +1,4 @@
-/archivos/*
+/Archivos/*
 .venv/
 
 # Salida generada por el procesador
@@ -21,3 +21,9 @@ __pycache__/
 # Basura comun de sistema/editor
 .DS_Store
 Thumbs.db
+
+# Generador de iconos y archivos graficos
+generar_icono.py
+icono.png
+icono.ico
+icono.icns
