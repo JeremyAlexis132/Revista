@@ -124,6 +124,20 @@ h6.como_citar {
     margin-left: 0 !important;
 }
 
+/* ============================================
+   TRANSCRIPCIONES Y CITAS TEXTUALES
+   ============================================ */
+[class*="TRANSCRIPCI"], [class*="Transcripci"], [class*="transcripci"], blockquote {
+    font-size: 1.0em !important; /* Ligeramente más pequeño que el texto base, pero legible */
+    line-height: 1.5 !important;
+    margin-top: 1.2em !important;
+    margin-bottom: 1.2em !important;
+    margin-left: 2.5em !important; /* Sangría izquierda */
+    margin-right: 2.5em !important; /* Sangría derecha */
+    text-align: justify !important;
+    text-indent: 0 !important; /* Sin sangría de primera línea para verse como bloque sólido */
+}
+
 /* Imágenes responsivas y a la izquierda */
 img {
     max-width: 100%;
