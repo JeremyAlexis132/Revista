@@ -4,7 +4,6 @@ Módulo para procesar y corregir archivos CSS de revistas académicas.
 
 import os
 import re
-import shutil
 from typing import List, Dict
 
 _BASE_FONT_PX = 12.0
@@ -40,10 +39,8 @@ def _px_a_em(valor_px: str) -> str:
     em_val = round(px_val / _BASE_FONT_PX, 1)
     return f"{em_val}em"
 
-
 def corregir_css(contenido_css: str) -> str:
     css = contenido_css
-
     css = re.sub(r'color:\s*#0000\b', 'color:#000000', css)
     css = re.sub(r'border-color:\s*#0000\b', 'border-color:#000000', css)
     css = re.sub(
@@ -80,14 +77,12 @@ def corregir_css(contenido_css: str) -> str:
 
     return css
 
-
 def generar_css_referencia() -> str:
     return """/* ============================================
    CSS adicional — Formato de referencia RMDE
    (https://revistas.juridicas.unam.mx)
    ============================================ */
 
-/* Contenedor principal responsivo */
 .contenedor {
     position: relative;
     padding: 3em 5% 2em 5%;
@@ -102,9 +97,6 @@ def generar_css_referencia() -> str:
     word-wrap: break-word;
 }
 
-/* ============================================
-   ALINEACIÓN A LA IZQUIERDA (Títulos y Metadatos)
-   ============================================ */
 h1, h2, h3, h4, h5, h6,
 .tcc-final, .tcc-ingles, .VV, .IA,
 .autor_final_2apellidos, .adscripcion, .pais, .ORCID2,
@@ -124,21 +116,17 @@ h6.como_citar {
     margin-left: 0 !important;
 }
 
-/* ============================================
-   TRANSCRIPCIONES Y CITAS TEXTUALES
-   ============================================ */
 [class*="TRANSCRIPCI"], [class*="Transcripci"], [class*="transcripci"], blockquote {
-    font-size: 1.0em !important; /* Ligeramente más pequeño que el texto base, pero legible */
+    font-size: 1em !important; /* Tamaño corregido para transcripciones */
     line-height: 1.5 !important;
     margin-top: 1.2em !important;
     margin-bottom: 1.2em !important;
-    margin-left: 2.5em !important; /* Sangría izquierda */
-    margin-right: 2.5em !important; /* Sangría derecha */
+    margin-left: 2.5em !important;
+    margin-right: 2.5em !important;
     text-align: justify !important;
-    text-indent: 0 !important; /* Sin sangría de primera línea para verse como bloque sólido */
+    text-indent: 0 !important; 
 }
 
-/* Imágenes responsivas y a la izquierda */
 img {
     max-width: 100%;
     height: auto;
@@ -149,13 +137,11 @@ img {
     margin-bottom: 1.4em;
 }
 
-/* Dar aire a bloques con imágenes */
 p:has(img), .image-block, figure {
     margin-top: 1.4em !important;
     margin-bottom: 1.4em !important;
 }
 
-/* Resetear alineación de párrafos que solo contienen imágenes */
 p.pp:has(img), p.body_text:has(img) {
     text-align: left !important;
 }
@@ -165,7 +151,6 @@ table {
     margin-bottom: 1.4em !important;
 }
 
-/* Identificadores inyectados para títulos de tablas e imágenes */
 .titulo-tabla-imagen {
     display: block !important;
     text-indent: 1.5em !important;
@@ -174,9 +159,6 @@ table {
     text-align: justify !important;
 }
 
-/* ============================================
-   FORZAR JUSTIFICADO EN TEXTOS BASE (Restaurado)
-   ============================================ */
 p.pp, p.body_text, 
 .resumenfinal, .abstract_final, .palabrasclave, .keywords_final, 
 p.bib, p.recepcion, p.acerca-del-autor, p.publicacion {
@@ -186,12 +168,9 @@ p.bib, p.recepcion, p.acerca-del-autor, p.publicacion {
     -webkit-hyphens: auto;
 }
 
-/* ============================================
-   TABLAS (Formato unificado, mismo tamaño, justificadas)
-   ============================================ */
 .table-responsive {
     width: 100%;
-    overflow-x: auto; /* Permite scroll horizontal fluido en móviles */
+    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     margin: 1.5em 0;
 }
@@ -201,10 +180,9 @@ table {
     max-width: 100%;
     margin: 0 !important;
     border-collapse: collapse !important;
-    table-layout: auto !important; /* Libera el ancho apachurrado en PC */
+    table-layout: auto !important;
 }
 
-/* Eliminar anchos fijos de columnas que rompen la vista en PC */
 table col, table colgroup {
     width: auto !important;
 }
@@ -212,28 +190,24 @@ table col, table colgroup {
 table td, table th {
     width: auto !important;
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
-    font-size: 1em !important; /* Mismo tamaño de letra que el texto base */
-    text-align: justify !important; /* Celdas justificadas */
+    font-size: 1em !important;
+    text-align: justify !important;
     padding: 0.6em !important;
     white-space: normal !important;
     word-break: normal !important;
 }
 
-/* Forzar estilos a cualquier elemento dentro de la tabla */
 table p, table span, table div {
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     font-size: 1em !important; 
-    text-align: justify !important; /* Textos justificados */
+    text-align: justify !important;
     white-space: normal !important;
     line-height: 1.4 !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    text-indent: 0 !important; /* Elimina la sangría dentro de la celda */
+    text-indent: 0 !important; 
 }
 
-/* ============================================
-   OTROS ELEMENTOS Y REFERENCIAS
-   ============================================ */
 .ORCID2 ._idSVGInline {
     display: inline-block;
     width: 1em;
@@ -273,17 +247,11 @@ p.pais {
     font-size: 0.95em !important;
 }
 
-p.pais + p.autor_final_2apellidos {
+p.pais + p.autor_final_2apellidos, p.adscripcion + p.autor_final_2apellidos {
     margin-top: 1.2em !important;
 }
 
-p.adscripcion + p.autor_final_2apellidos {
-    margin-top: 1.2em !important;
-}
-
-p.autor_final_2apellidos + p.resumenfinal,
-p.adscripcion + p.resumenfinal,
-p.pais + p.resumenfinal {
+p.autor_final_2apellidos + p.resumenfinal, p.adscripcion + p.resumenfinal, p.pais + p.resumenfinal {
     margin-top: 1.2em !important;
 }
 
@@ -319,6 +287,7 @@ h4.IA {
     margin-top: 1.2em;
     margin-bottom: 0.8em;
 }
+
 .ORCID2 + p, .ORCID2 + p + p {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
@@ -357,7 +326,6 @@ section._idFootnotes {
     display: inline-block;
 }
 
-/* REGLA AÑADIDA: Fuerza al span a respetar el tamaño grande */
 .Marco-de-texto-b-sico p.body_text2 span {
     font-size: 1em !important;
     font-family: inherit !important;
@@ -439,7 +407,6 @@ span.cursivas {
     font-weight: normal;
 }
 
-/* Referencias Finales a la izquierda estricto (Como citar) */
 .como_citar_section, .como_citar_section p, .como_citar_section div, p.APA, p.iijunam, p.rmde {
     text-align: left !important;
     text-indent: 0 !important;
@@ -459,33 +426,21 @@ span.cursivas {
 }
 """
 
-def procesar_css(
-    rutas_css_origen: List[str],
-    carpeta_css_destino: str,
-    _nombre_revista: str,
-) -> List[str]:
-    archivos_generados: List[str] = []
-
+def procesar_y_combinar_css(rutas_css_origen: List[str]) -> str:
+    """Devuelve todo el CSS procesado como una única cadena de texto en vez de crear archivos."""
+    css_final = []
+    
     for ruta_css in rutas_css_origen:
-        nombre_archivo = os.path.basename(ruta_css)
         try:
             with open(ruta_css, "r", encoding="utf-8") as f:
                 contenido = f.read()
         except (IOError, UnicodeDecodeError):
             continue
-
+            
         contenido_corregido = corregir_css(contenido)
-        destino = os.path.join(carpeta_css_destino, nombre_archivo)
-
-        with open(destino, "w", encoding="utf-8") as f:
-            f.write(contenido_corregido)
-
-        archivos_generados.append(nombre_archivo)
+        css_final.append(contenido_corregido)
 
     css_referencia = generar_css_referencia()
-    ruta_referencia = os.path.join(carpeta_css_destino, "referencia.css")
-    with open(ruta_referencia, "w", encoding="utf-8") as f:
-        f.write(css_referencia)
+    css_final.append(css_referencia)
 
-    archivos_generados.append("referencia.css")
-    return archivos_generados
+    return "\n".join(css_final)

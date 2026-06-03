@@ -8,13 +8,7 @@ import urllib.parse
 import unicodedata
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
-
 from bs4 import BeautifulSoup, Tag, NavigableString
-
-
-# ──────────────────────────────────────────────────────────
-#  Modelo de datos del artículo
-# ──────────────────────────────────────────────────────────
 
 @dataclass
 class Autor:
@@ -48,10 +42,11 @@ ORCID_SVG = """<span class="_idSVGInline"><svg version="1.1" xmlns="https://lh7-
 <circle class="st0" cx="128" cy="128" r="128"/>
 <g>
 <path class="st1" d="M86.3,186.2H70.9V79.1h15.4v48.4V186.2z"/>
-<path class="st1" d="M108.9,79.1h41.6c39.6,0,57,28.3,57,53.6c0,27.5-21.5,53.6-56.8,53.6h-41.8V79.1z M124.3,172.4h24.5c34.9,0,42.9-26.5,42.9-39.7c0-21.5-13.7-39.7-43.7-39.7h-23.7V172.4z"/>
-<path class="st1" d="M88.7,56.8c0,5.5-4.5,10.1-10.1,10.1c-5.6,0-10.1-4.6-10.1-10.1c0-5.6,4.5-10.1,10.1-10.1C84.2,46.7,88.7,51.3,88.7,56.8z"/>
+<path class="st1" d="M108.9,79.1h41.6c39.6,0,57,28.3,57,53.6c0,27.5-21.5,53.6-56.8,53.6h-41.8V79.1z M124.3,172.4h24.5
+c34.9,0,42.9-26.5,42.9-39.7c0-21.5-13.7-39.7-43.7-39.7h-23.7V172.4z"/>
+<path class="st1" d="M88.7,56.8c0,5.5-4.5,10.1-10.1,10.1c-5.6,0-10.1-4.6-10.1-10.1c0-5.6,4.5-10.1,10.1-10.1
+C84.2,46.7,88.7,51.3,88.7,56.8z"/>
 </g></svg></span>"""
-
 
 def _limpiar_texto(elemento) -> str:
     if elemento is None:
@@ -63,25 +58,20 @@ def _obtener_html_interno(elemento) -> str:
         return ""
     return "".join(str(child) for child in elemento.children)
 
-
 def _normalizar_html_bloque(html: str) -> str:
     html = re.sub(r"\s+", " ", html or "")
     return html.strip()
 
-
 def _deduplicar_bloques_html(bloques: List[str]) -> List[str]:
     vistos = set()
     bloques_unicos: List[str] = []
-
     for bloque in bloques:
         clave = _normalizar_html_bloque(bloque)
         if not clave or clave in vistos:
             continue
         vistos.add(clave)
         bloques_unicos.append(bloque)
-
     return bloques_unicos
-
 
 def _es_otros_postcontenido(texto: str) -> bool:
     if not texto:
@@ -96,7 +86,6 @@ def _es_otros_postcontenido(texto: str) -> bool:
     )
     return any(texto_upper.startswith(kw) for kw in kws)
 
-
 def _es_acerca_de_autor(texto: str, clases: str) -> bool:
     clases_lower = clases.lower()
     if "acerca-del-autor" in clases_lower or "estilo-de-p-rrafo-6" in clases_lower:
@@ -106,6 +95,14 @@ def _es_acerca_de_autor(texto: str, clases: str) -> bool:
         return True
     return False
 
+def _es_fecha(texto: str, clases: str) -> bool:
+    t_lower = texto.lower().strip()
+    c_lower = clases.lower()
+    if any(x in c_lower for x in ["recepcion", "publicacion", "aceptacion", "recibido", "aceptado", "aprobacion", "publicado"]):
+        return True
+    if any(t_lower.startswith(x) for x in ["recepción:", "recibido:", "aceptación:", "aceptado:", "aprobación:", "aprobado:", "publicación:", "publicado:"]):
+        return True
+    return False
 
 def _extraer_url_doi(texto: str) -> str:
     if not texto:
@@ -123,27 +120,19 @@ def _extraer_url_doi(texto: str) -> str:
         url = "https://doi.org/" + url
     return url
 
-
 def _normalizar_identificador_html(elemento: Tag, texto_plano: str) -> str:
     clases = " ".join(_clases_de_elemento(elemento)).lower()
-
     if "identificadorfinal" in clases:
         return texto_plano
-
     if "creative commons" in (texto_plano or "").lower():
         cc_url = "https://creativecommons.org/licenses/by/4.0/"
-        match = re.search(
-            r"^(.*?)(Licencia\s+Creative\s+Commons[^.]*)(\.?$)",
-            texto_plano.strip(),
-            re.IGNORECASE,
-        )
+        match = re.search(r"^(.*?)(Licencia\s+Creative\s+Commons[^.]*)(\.?$)", texto_plano.strip(), re.IGNORECASE)
         if match:
             prefijo = match.group(1).strip()
             licencia = match.group(2).strip()
             if prefijo:
                 return f'{prefijo} <a href="{cc_url}"><span class="hipervinculo">{licencia}</span></a>'
             return f'<a href="{cc_url}"><span class="hipervinculo">{licencia}</span></a>'
-
     if "doi" in (texto_plano or "").lower():
         url_doi = ""
         url_doi_texto = _extraer_url_doi(texto_plano)
@@ -168,26 +157,59 @@ def _normalizar_identificador_html(elemento: Tag, texto_plano: str) -> str:
             if prefijo:
                 return f'{prefijo} <a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
             return f'<a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
-
     return _obtener_html_interno(elemento)
 
+def _generar_identificadores_faltantes(contenido: ContenidoArticulo, nombre_revista: str) -> List[str]:
+    """Genera el bloque de metadatos inicial si este fue omitido en la exportación de InDesign."""
+    if contenido.identificadores:
+        return contenido.identificadores
+
+    revista_id = str(nombre_revista.split('_')[0])
+    
+    vol_num = "[Vol(Núm)]"
+    meses_ano = "[Meses de Año]"
+    e_id = f"e{revista_id}"
+    doi_html = '<span class="hipervinculo">[colocar doi aquí]</span>'
+
+    for cita in contenido.como_citar:
+        texto_plano = BeautifulSoup(cita, "html.parser").get_text()
+        if "Revista Mexicana de Derecho Electoral" in texto_plano:
+            match_vol = re.search(r'vol\.\s*(\d+),\s*núm\.\s*(\d+),\s*([^,]+),\s*(e\d+)', texto_plano, re.IGNORECASE)
+            if match_vol:
+                vol_num = f"{match_vol.group(1)}({match_vol.group(2)})"
+                meses_ano = match_vol.group(3).strip()
+                e_id = match_vol.group(4).strip()
+            
+            # Buscar todos los DOIs posibles en el texto
+            matches_doi = re.findall(r'(https?://(?:dx\.)?doi\.org/[^\s]+)', texto_plano, re.IGNORECASE)
+            for doi_match in matches_doi:
+                doi_url = doi_match.rstrip(".,;")
+                # Validación estricta: el DOI debe terminar con el ID de la revista
+                if doi_url.endswith(revista_id):
+                    doi_html = f'<a href="{doi_url}"><span class="hipervinculo">{doi_url}</span></a>'
+                    break
+            break
+
+    line1 = f"Revista Mexicana de Derecho Electoral, {vol_num}, {meses_ano}, {e_id}"
+    line2 = f'e-ISSN: 2448-7910  DOI: {doi_html}'
+    line3 = 'Esta obra está bajo una <a href="https://creativecommons.org/licenses/by/4.0/"><span class="hipervinculo">Licencia Creative Commons Reconocimiento 4.0 Internacional</span></a>'
+    line4 = '<span class="hipervinculo">Instituto de Investigaciones Jurídicas de la Universidad Nacional Autónoma de México</span>'
+
+    return [line1, line2, line3, line4]
 
 def _extraer_tipo_desde_marco(soup: BeautifulSoup) -> str:
     marco = soup.find("div", class_="Marco-de-texto-b-sico")
     if not marco:
         return ""
-
     body_text2 = marco.find("p", class_="body_text2")
     if body_text2:
         return _limpiar_texto(body_text2)
-
     partes: List[str] = []
     for p in marco.find_all("p"):
         texto = _limpiar_texto(p)
         if texto:
             partes.append(texto)
     return " ".join(partes).strip()
-
 
 def _normalizar_tipo_articulo(texto: str) -> str:
     limpio = re.sub(r"\s+", " ", texto or "").strip()
@@ -207,38 +229,29 @@ def _clave_tipo_articulo(texto: str) -> str:
     limpio = re.sub(r"\s+", " ", limpio).strip().lower()
     return limpio
 
-
 def _extraer_orcid_desde_elemento(elemento: Optional[Tag]) -> str:
     if elemento is None:
         return ""
-
     enlace = elemento.find("a", href=True)
     if enlace and "orcid.org" in enlace["href"]:
         return enlace["href"].strip()
-
     texto = elemento.get_text(" ", strip=True)
     match = re.search(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b", texto)
     if match:
         return f"https://orcid.org/{match.group(0)}"
-
     return ""
-
 
 def _limpiar_nombre_autor(elemento: Tag) -> str:
     copia = BeautifulSoup(str(elemento), "html.parser")
     contenedor = copia.find("p") or copia
-
     for link in contenedor.find_all("a", href=True):
         if "orcid.org" in link["href"]:
             link.decompose()
-
     for img in contenedor.find_all("img"):
         src = img.get("src", "").lower()
         if "orcid" in src:
             img.decompose()
-
     return "".join(str(child) for child in contenedor.children).strip()
-
 
 def _clases_de_elemento(elemento: Tag) -> List[str]:
     clases = elemento.get("class", [])
@@ -246,26 +259,20 @@ def _clases_de_elemento(elemento: Tag) -> List[str]:
         return [clases]
     return [str(c) for c in clases]
 
-
 def _tiene_orcid_en_bloque(elemento: Tag) -> bool:
     enlace = elemento.find("a", href=True)
     if enlace and "orcid.org" in enlace.get("href", ""):
         return True
     return bool(re.search(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b", elemento.get_text(" ", strip=True)))
 
-
 def _parece_bloque_autor(elemento: Tag) -> bool:
     if elemento.name != "p":
         return False
-        
     clases = [c.lower() for c in _clases_de_elemento(elemento)]
-    
     if any("adscripcion" in c or "pais" in c or "acerca-del-autor" in c for c in clases):
         return False
-        
     if any("autor" in c for c in clases):
         return True
-
     if any(c.startswith("estilo-de-p-rrafo") or c.startswith("paraoverride") for c in clases):
         for sib in elemento.find_next_siblings(limit=2):
             if not isinstance(sib, Tag):
@@ -275,40 +282,31 @@ def _parece_bloque_autor(elemento: Tag) -> bool:
                 return True
             if _tiene_orcid_en_bloque(sib):
                 return True
-
     return False
-
 
 def _extraer_autores_desde_elementos(elementos: List[Tag]) -> List[Autor]:
     autores: List[Autor] = []
     idx = 0
-
     while idx < len(elementos):
         elem = elementos[idx]
         clases = " ".join(_clases_de_elemento(elem)).lower()
-
         if "resumenfinal" in clases:
             break
-
         if not _parece_bloque_autor(elem):
             idx += 1
             continue
-
         nombre = _limpiar_nombre_autor(elem)
         orcid = _extraer_orcid_desde_elemento(elem)
         autor = Autor(nombre=nombre, orcid=orcid)
-
         idx += 1
         while idx < len(elementos):
             sib = elementos[idx]
             clases_sib = " ".join(_clases_de_elemento(sib)).lower()
-
             if "resumenfinal" in clases_sib:
                 break
             if _parece_bloque_autor(sib):
                 idx -= 1
                 break
-
             if "adscripcion" in clases_sib:
                 texto = _limpiar_texto(sib)
                 orcid_en_ads = _extraer_orcid_desde_elemento(sib)
@@ -322,14 +320,10 @@ def _extraer_autores_desde_elementos(elementos: List[Tag]) -> List[Autor]:
                         autor.adscripcion = texto
             elif "pais" in clases_sib:
                 autor.pais = _limpiar_texto(sib)
-
             idx += 1
-
         autores.append(autor)
         idx += 1
-
     return autores
-
 
 def _extraer_autores_desde_documento(soup: BeautifulSoup) -> List[Autor]:
     autores: List[Autor] = []
@@ -345,7 +339,6 @@ def _extraer_autores_desde_documento(soup: BeautifulSoup) -> List[Autor]:
         container = soup.body
     if container is None:
         return autores
-
     elementos = [e for e in container.children if isinstance(e, Tag)]
     return _extraer_autores_desde_elementos(elementos)
 
@@ -353,33 +346,29 @@ def _extraer_autores_desde_documento(soup: BeautifulSoup) -> List[Autor]:
 def extraer_contenido(html_path: str) -> ContenidoArticulo:
     with open(html_path, "r", encoding="utf-8") as f:
         soup = BeautifulSoup(f.read(), "html.parser")
-
+        
     for span in soup.find_all("span", class_="no-separar"):
         span.unwrap()
-
+        
     contenido = ContenidoArticulo()
-
     container = None
     titulo_h1 = soup.find("h1", class_="tcc-final")
+    
     if titulo_h1 is not None:
         container = titulo_h1.find_parent("div")
-
     if container is None:
         container = soup.find("div", class_="_idGenObjectStyleOverride-2")
-
     if container is None:
         container = soup.find("div", class_="_idGenObjectStyleOverride-1")
-
     if container is None:
         container = soup.body
     if container is None:
         return contenido
-
+        
     elementos = [e for e in container.children if isinstance(e, Tag)]
-
     contenido.tipo_articulo = _extraer_tipo_desde_marco(soup)
     contenido.tipo_articulo = _normalizar_tipo_articulo(contenido.tipo_articulo)
-
+    
     idx = 0
     fase = "identificadores"
     autor_actual: Optional[Autor] = None
@@ -388,7 +377,13 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     while idx < len(elementos):
         elem = elementos[idx]
         clases = " ".join(_clases_de_elemento(elem))
-
+        texto_limpio = _limpiar_texto(elem)
+        
+        if fase in ["identificadores", "titulo_en", "autores", "autor_detalles", "resumen", "palabras_clave", "abstract", "keywords"]:
+            if elem.name in ["h1", "h2", "h3"] or "VV" in clases:
+                if not ("tcc-final" in clases or "tcc-ingles" in clases):
+                    fase = "cuerpo"
+        
         if elem.name == "table":
             str_elem = f'<div class="table-responsive">\n{elem}\n</div>'
         else:
@@ -397,13 +392,10 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         if fase == "identificadores" and ("identificador" in clases):
             texto_plano = elem.get_text(" ", strip=True)
             html_interno = _normalizar_identificador_html(elem, texto_plano)
-            
             texto_comparacion = texto_plano.replace(" ", "").lower()
-            
             if texto_comparacion and texto_comparacion not in textos_identificadores_vistos:
                 contenido.identificadores.append(html_interno)
                 textos_identificadores_vistos.add(texto_comparacion)
-                
             idx += 1
             continue
 
@@ -471,24 +463,23 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             idx += 1
             continue
 
-        if "keywords_final" in clases:
-            contenido.keywords = _obtener_html_interno(elem)
-            fase = "cuerpo"
-            idx += 1
-            continue
+        if fase == "keywords":
+            if "keywords_final" in clases or "palabrasclave" in clases or texto_limpio.upper().startswith("KEYWORDS"):
+                contenido.keywords = _obtener_html_interno(elem)
+                fase = "cuerpo"
+                idx += 1
+                continue
 
         if fase == "cuerpo":
             if elem.name == "h3" and "VV" in clases:
-                texto_h3 = _limpiar_texto(elem).lower()
+                texto_h3 = texto_limpio.lower()
                 if "referencia" in texto_h3:
                     fase = "referencias"
                     contenido.secciones_cuerpo.append(str_elem)
                     idx += 1
                     continue
-                    
-            texto_limpio = _limpiar_texto(elem)
             
-            if "recepcion" in clases or texto_limpio.startswith("Recepción:") or _es_otros_postcontenido(texto_limpio) or _es_acerca_de_autor(texto_limpio, clases):
+            if _es_fecha(texto_limpio, clases) or _es_otros_postcontenido(texto_limpio) or _es_acerca_de_autor(texto_limpio, clases):
                 fase = "postcontenido"
             else:
                 texto_upper = texto_limpio.upper()
@@ -501,21 +492,20 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                             clases_elem.append("titulo-tabla-imagen")
                             elem["class"] = clases_elem
                             str_elem = str(elem)
-
                 contenido.secciones_cuerpo.append(str_elem)
                 idx += 1
                 continue
 
         if fase == "referencias":
-            texto_limpio = _limpiar_texto(elem)
             es_otros = _es_otros_postcontenido(texto_limpio)
             es_acerca_de_autor = _es_acerca_de_autor(texto_limpio, clases)
+            es_fecha = _es_fecha(texto_limpio, clases)
             
-            if "bib" in clases and not es_otros and not es_acerca_de_autor:
+            if "bib" in clases and not es_otros and not es_acerca_de_autor and not es_fecha:
                 contenido.referencias.append(str_elem)
                 idx += 1
                 continue
-            elif "recepcion" in clases or texto_limpio.startswith("Recepción:") or es_otros or es_acerca_de_autor or elem.name == "hr":
+            elif es_fecha or es_otros or es_acerca_de_autor or elem.name == "hr":
                 fase = "postcontenido"
             else:
                 contenido.referencias.append(str_elem)
@@ -523,20 +513,14 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 continue
 
         if fase == "postcontenido":
-            texto_limpio = _limpiar_texto(elem)
-            
             if "como_citar" in clases or texto_limpio.upper() == "CÓMO CITAR":
                 fase = "como_citar"
                 contenido.como_citar.append(str_elem)
                 idx += 1
                 continue
-                
-            if "recepcion" in clases or texto_limpio.startswith("Recepción:"):
-                contenido.fechas.append(_obtener_html_interno(elem))
-            elif "publicacion" in clases or texto_limpio.startswith("Publicación:"):
-                contenido.fechas.append(_obtener_html_interno(elem))
-            elif texto_limpio.startswith("Aceptación:") or texto_limpio.startswith("Aceptado:"):
-                contenido.fechas.append(_obtener_html_interno(elem))
+            
+            if _es_fecha(texto_limpio, clases):
+                contenido.fechas.append(_obtener_html_interno(elem).strip())
             elif _es_acerca_de_autor(texto_limpio, clases):
                 if isinstance(elem, Tag):
                     clases_elem = elem.get("class", [])
@@ -600,8 +584,7 @@ def _corregir_rutas_imagenes(html: str) -> str:
         nombre = urllib.parse.unquote(nombre_original)
         nombre = unicodedata.normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('utf-8')
         nombre = re.sub(r'[^\w\.-]', '_', nombre)
-        
-        return f'src="images/{nombre}"'
+        return f'src="{nombre}"'
 
     html = re.sub(
         r'src="[^"]*?(?:web-resources/image/|image/)([^"]+)"',
@@ -611,26 +594,15 @@ def _corregir_rutas_imagenes(html: str) -> str:
     return html
 
 def _corregir_rutas_footnotes(html: str) -> str:
-    html = re.sub(
-        r'href="[^"#]*\.html(#[^"]+)"',
-        r'href="\1"',
-        html,
-    )
+    html = re.sub(r'href="[^"#]*\.html(#[^"]+)"', r'href="\1"', html)
     return html
 
 def _generar_bloque_autor(autor: Autor) -> str:
     lineas = []
     orcid_html = ""
     if autor.orcid:
-        orcid_html = (
-            f' <span class="Versalitas">'
-            f'<a href="{autor.orcid}">{ORCID_SVG}</a>'
-            f'</span>'
-        )
-    lineas.append(
-        f'<p class="autor_final_2apellidos ORCID2">'
-        f'{autor.nombre}{orcid_html}</p>'
-    )
+        orcid_html = (f' <span class="Versalitas"><a href="{autor.orcid}">{ORCID_SVG}</a></span>')
+    lineas.append(f'<p class="autor_final_2apellidos ORCID2">{autor.nombre}{orcid_html}</p>')
     if autor.adscripcion:
         if "\n" in autor.adscripcion:
             for linea in (parte.strip() for parte in autor.adscripcion.split("\n")):
@@ -644,27 +616,27 @@ def _generar_bloque_autor(autor: Autor) -> str:
 
 def generar_html_referencia(
     contenido: ContenidoArticulo,
-    archivos_css: List[str],
+    css_inline: str,
     nombre_revista: str,
 ) -> str:
-    css_links = []
-    for css_file in archivos_css:
-        css_links.append(f'\t\t<link href="css/{css_file}" rel="stylesheet" type="text/css" />')
-    css_links_str = "\n".join(css_links)
+    
+    css_tags = f"<style>\n{css_inline}\n\t\t</style>"
+
+    identificadores_lista = contenido.identificadores
+    if not identificadores_lista:
+        identificadores_lista = _generar_identificadores_faltantes(contenido, nombre_revista)
 
     identificadores_html = ""
     separador_identificadores = ""
-    if contenido.identificadores:
+    
+    if identificadores_lista:
         id_lines = []
-        for i, ident in enumerate(contenido.identificadores):
-            if i < len(contenido.identificadores) - 1:
+        for i, ident in enumerate(identificadores_lista):
+            if i < len(identificadores_lista) - 1:
                 id_lines.append(f'<br>{ident}')
             else:
                 id_lines.append(f'<br>{ident}<br><br>')
-        identificadores_html = f"""
-\t\t<p class="notas_iniciales">\t
-\t\t\t{''.join(id_lines)}
-\t\t</p>"""
+        identificadores_html = f"""\n\t\t<p class="notas_iniciales">\t\n\t\t\t{''.join(id_lines)}\n\t\t</p>"""
         separador_identificadores = '\n\t\t<hr class="HorizontalRule-1" />'
 
     tipo_articulo = contenido.tipo_articulo or "Artículo"
@@ -672,10 +644,7 @@ def generar_html_referencia(
     if _clave_tipo_articulo(tipo_articulo) != "articulo":
         tipo_clase = " tipo-no-articulo"
         
-    marco_html = f"""
-\t\t\t<div id="_idContainer000" class="Marco-de-texto-b-sico _idGenObjectStyleOverride-1">
-\t\t\t\t<p class="body_text2{tipo_clase}"><span>{tipo_articulo}</span></p>
-\t\t\t</div>"""
+    marco_html = f"""\n\t\t\t<div id="_idContainer000" class="Marco-de-texto-b-sico _idGenObjectStyleOverride-1">\n\t\t\t\t<p class="body_text2{tipo_clase}"><span>{tipo_articulo}</span></p>\n\t\t\t</div>"""
 
     autores_html = "\n\t\t\t".join(_generar_bloque_autor(a) for a in contenido.autores)
     resumen_html = f'<p class="resumenfinal ParaOverride-5">{contenido.resumen}</p>' if contenido.resumen else ""
@@ -687,7 +656,6 @@ def generar_html_referencia(
 
     bloques_post = []
 
-    # Filtrar bloques de "otros contenidos" para descartar elementos vacíos basura de InDesign
     if contenido.otros_postcontenido:
         otros_validos = []
         for html_chunk in contenido.otros_postcontenido:
@@ -698,19 +666,25 @@ def generar_html_referencia(
         if otros_validos:
             bloques_post.extend(otros_validos)
 
-    # REGLA APLICADA: Unificar las fechas en un mismo bloque utilizando saltos de línea suaves (<br>)
     if contenido.fechas:
         fechas_validas = []
         for fecha in contenido.fechas:
-            # Limpiar etiquetas y espacios invisibles que causaban los "huecos"
-            texto_plano = BeautifulSoup(fecha, "html.parser").get_text().replace('\xa0', '').replace('\u200b', '').strip()
-            if texto_plano:
-                fechas_validas.append(fecha)
+            if fecha.strip():
+                fechas_validas.append(fecha.strip())
         
         if fechas_validas:
+            def sort_fechas(f):
+                f_low = f.lower()
+                if "recep" in f_low or "recibi" in f_low: return 1
+                if "acept" in f_low or "aprob" in f_low: return 2
+                if "publi" in f_low: return 3
+                return 4
+                
+            fechas_validas.sort(key=sort_fechas)
+
             if not bloques_post or bloques_post[-1] != '<hr class="HorizontalRule-1" />':
                 bloques_post.append('<hr class="HorizontalRule-1" />')
-            # Unir las fechas puras para garantizar 0 margen extra y total uniformidad
+            
             fechas_unidas = "<br>\n\t\t\t\t".join(fechas_validas)
             bloques_post.append(f'<p class="recepcion">{fechas_unidas}</p>')
             bloques_post.append('<hr class="HorizontalRule-1" />')
@@ -755,7 +729,7 @@ def generar_html_referencia(
 \t\t<meta charset="utf-8" />
 \t\t<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 \t\t<title>{nombre_revista}</title>
-{css_links_str}
+\t\t{css_tags}
 \t</head>
 \t<body id="x{nombre_revista}">
 \t\t<div class="contenedor">
@@ -783,7 +757,7 @@ def generar_html_referencia(
 
 def procesar_html(
     html_path: str,
-    archivos_css: List[str],
+    css_inline: str,
     ruta_salida_html: str,
     nombre_revista: str,
     tipo_articulo_forzado: Optional[str] = None,
@@ -795,12 +769,11 @@ def procesar_html(
             forzado = tipo_articulo_forzado.lower().replace(" ", "")
             if not contenido.tipo_articulo or normalizado == forzado:
                 contenido.tipo_articulo = tipo_articulo_forzado
-        html_final = generar_html_referencia(contenido, archivos_css, nombre_revista)
+        html_final = generar_html_referencia(contenido, css_inline, nombre_revista)
 
         with open(ruta_salida_html, "w", encoding="utf-8") as f:
             f.write(html_final)
         return True
-
     except Exception as e:
         print(f"    ✗ Error procesando HTML: {e}")
         import traceback

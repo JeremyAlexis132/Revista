@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_DIR)
 
-from Modules.css_processor import procesar_css
+from Modules.css_processor import procesar_y_combinar_css
 from Modules.sections import obtener_procesador_por_seccion
 from Modules.utils import (
     construir_clave_bitacora,
@@ -89,7 +89,6 @@ QLabel#InfoLabel {
 }
 """
 
-# --- LISTA PERSONALIZADA PARA ARRASTRAR Y SOLTAR ---
 class DropListWidget(QListWidget):
     def __init__(self, add_callback, parent=None):
         super().__init__(parent)
@@ -119,10 +118,9 @@ class DropListWidget(QListWidget):
 class RevistaApp(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Formato Revistas - Procesador RMDE")
+        self.setWindowTitle("Formato Revistas")
         self.resize(950, 650)
         
-        # Configurar Ícono de la ventana (Asegúrate de tener un icono.png en tu carpeta)
         icono_path = os.path.join(PROJECT_DIR, "icono.png")
         if os.path.exists(icono_path):
             self.setWindowIcon(QIcon(icono_path))
@@ -130,7 +128,6 @@ class RevistaApp(QMainWindow):
         self.bitacora_path = os.path.join(PROJECT_DIR, "bitacora.json")
         self.ids_procesados = leer_bitacora(self.bitacora_path)
 
-        # Usar la nueva lista que soporta arrastrar y soltar
         self.folders_list = DropListWidget(self.add_folder_path)
 
         self.output_label = QLabel("Salida: (Ninguna carpeta seleccionada)")
@@ -140,22 +137,19 @@ class RevistaApp(QMainWindow):
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
 
-        # Botones
         add_btn = QPushButton("Buscar Carpeta...")
         remove_btn = QPushButton("Quitar Selección")
         clear_btn = QPushButton("Limpiar Todo")
         output_btn = QPushButton("Elegir Carpeta de Salida")
         process_btn = QPushButton("Procesar Archivos")
-        process_btn.setObjectName("ProcessBtn") # ID para darle estilo verde especial
+        process_btn.setObjectName("ProcessBtn")
 
-        # Conexiones
         add_btn.clicked.connect(self.add_folder)
         remove_btn.clicked.connect(self.remove_selected)
         clear_btn.clicked.connect(self.clear_folders)
         output_btn.clicked.connect(self.choose_output_dir)
         process_btn.clicked.connect(self.process_all)
 
-        # Layout Izquierdo (Entrada)
         left_layout = QVBoxLayout()
         left_layout.addWidget(QLabel("Carpetas a procesar:"))
         
@@ -171,7 +165,6 @@ class RevistaApp(QMainWindow):
         controls_layout.addWidget(clear_btn)
         left_layout.addLayout(controls_layout)
 
-        # Layout Derecho (Salida y Log)
         right_layout = QVBoxLayout()
         right_layout.addWidget(QLabel("Destino:"))
         right_layout.addWidget(self.output_label)
@@ -183,11 +176,10 @@ class RevistaApp(QMainWindow):
         right_layout.addSpacing(10)
         right_layout.addWidget(process_btn)
 
-        # Layout Principal
         main_layout = QHBoxLayout()
-        main_layout.addLayout(left_layout, 4) # Proporción 4
+        main_layout.addLayout(left_layout, 4)
         main_layout.addSpacing(10)
-        main_layout.addLayout(right_layout, 5) # Proporción 5
+        main_layout.addLayout(right_layout, 5)
 
         container = QWidget()
         container.setLayout(main_layout)
@@ -195,22 +187,18 @@ class RevistaApp(QMainWindow):
 
     def log(self, message: str) -> None:
         self.log_view.append(message)
-        # Auto-scroll hacia abajo
         scrollbar = self.log_view.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
     def add_folder(self) -> None:
-        # Esto sirve como alternativa manual si el usuario no quiere arrastrar y soltar
         folder = QFileDialog.getExistingDirectory(self, "Selecciona una carpeta")
         if folder:
             self.add_folder_path(folder)
 
     def add_folder_path(self, folder: str) -> None:
-        # Evitar duplicados en la lista
         for i in range(self.folders_list.count()):
             if self.folders_list.item(i).data(Qt.UserRole) == folder:
                 return
-        
         item = QListWidgetItem(os.path.basename(folder))
         item.setData(Qt.UserRole, folder)
         self.folders_list.addItem(item)
@@ -310,7 +298,7 @@ class RevistaApp(QMainWindow):
         css_paths = encontrar_css_en_carpeta(folder_path)
         rutas = crear_estructura_salida(self.output_dir, folder_name)
 
-        archivos_css = procesar_css(css_paths, rutas["css"], folder_name)
+        css_inline = procesar_y_combinar_css(css_paths)
         copiar_imagenes(folder_path, rutas["images"])
 
         codigo_seccion = extraer_codigo_seccion(folder_name)
@@ -318,19 +306,17 @@ class RevistaApp(QMainWindow):
 
         return procesador_html(
             html_path=html_path,
-            archivos_css=archivos_css,
+            css_inline=css_inline,
             ruta_salida_html=rutas["html"],
             nombre_revista=folder_name,
         )
 
-
 def main() -> None:
     app = QApplication(sys.argv)
-    app.setStyleSheet(MODERN_STYLE) # Aplicar el estilo a toda la app
+    app.setStyleSheet(MODERN_STYLE) 
     window = RevistaApp()
     window.show()
     sys.exit(app.exec())
-
 
 if __name__ == "__main__":
     main()
