@@ -5,6 +5,10 @@ Módulo de utilidades específicas para la Revista Mexicana de Derecho Electoral
 import re
 from typing import Optional
 
+def es_carpeta_valida(nombre_carpeta: str) -> bool:
+    """Filtra solo las carpetas que pertenecen a RMDE."""
+    return "_rmde" in nombre_carpeta.lower()
+
 def extraer_id_de_carpeta(nombre_carpeta: str) -> Optional[str]:
     match = re.match(r"^(\d+)", nombre_carpeta)
     return match.group(1) if match else None

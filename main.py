@@ -41,25 +41,27 @@ def seleccionar_revista() -> str:
     while True:
         print("\nSeleccione la revista a procesar:")
         print("  1. Revista Mexicana de Derecho Electoral (RMDE)")
-        print("  2. Cuestiones Constitucionales (CC) - [En desarrollo]")
+        print("  2. Cuestiones Constitucionales (CC)")
         print("  3. Salir")
         opcion = input("\nIngrese el número de la opción: ").strip()
 
         if opcion == "1":
             return "rmde"
         elif opcion == "2":
-            print("\n  [Aviso] El módulo para Cuestiones Constitucionales se encuentra actualmente en desarrollo. Seleccione otra opción.")
+            return "cc"
         elif opcion == "3":
             print("\n  Saliendo del programa...")
             sys.exit(0)
         else:
             print("\n  [Error] Opción no válida. Por favor, intente de nuevo.")
 
-def procesar_revista_rmde(nombre_carpeta: str, ruta_carpeta: str) -> bool:
-    # Importaciones específicas de RMDE para evitar acoplamiento con otras revistas
-    from Modules.journals.rmde.css_processor import procesar_y_combinar_css
-    from Modules.journals.rmde.utils import extraer_codigo_seccion
-
+def procesar_carpeta_revista(
+    nombre_carpeta: str, 
+    ruta_carpeta: str, 
+    procesador_css, 
+    procesador_html
+) -> bool:
+    """Flujo genérico de procesamiento aplicado a cualquier revista."""
     html_path = encontrar_html_en_carpeta(ruta_carpeta)
     if html_path is None:
         print(f"  Error: No se encontró archivo HTML en {nombre_carpeta}")
@@ -69,13 +71,10 @@ def procesar_revista_rmde(nombre_carpeta: str, ruta_carpeta: str) -> bool:
     rutas = crear_estructura_salida(SALIDA_DIR, nombre_carpeta)
 
     # 1. Obtener CSS unificado
-    css_inline = procesar_y_combinar_css(css_paths)
+    css_inline = procesador_css(css_paths)
     
     # 2. Copiar imágenes a la base
     copiar_imagenes(ruta_carpeta, rutas["images"])
-
-    codigo_seccion = extraer_codigo_seccion(nombre_carpeta)
-    procesador_html = obtener_procesador_por_seccion(codigo_seccion)
 
     # 3. Procesar HTML
     return procesador_html(
@@ -90,69 +89,89 @@ def main() -> None:
 
     revista_seleccionada = seleccionar_revista()
 
+    # Importaciones dinámicas según la revista seleccionada
     if revista_seleccionada == "rmde":
-        from Modules.journals.rmde.utils import extraer_id_de_carpeta, construir_clave_bitacora
-        
-        if not os.path.exists(ARCHIVOS_DIR):
-            print(f"\n  Error: No existe la carpeta de entrada '{ARCHIVOS_DIR}'")
-            return
-
-        carpetas = []
-        for item in os.listdir(ARCHIVOS_DIR):
-            ruta = os.path.join(ARCHIVOS_DIR, item)
-            if os.path.isdir(ruta) and not item.startswith("."):
-                carpetas.append((item, ruta))
-
-        if not carpetas:
-            print(f"\n  No hay carpetas para procesar en '{ARCHIVOS_DIR}'")
-            return
-
-        ids_procesados = leer_bitacora(BITACORA_PATH)
-        inicio = time.time()
-        procesadas = 0
-        omitidas = 0
-        errores = 0
-
+        from Modules.journals.rmde.utils import extraer_id_de_carpeta, extraer_codigo_seccion, construir_clave_bitacora, es_carpeta_valida
+        from Modules.journals.rmde.css_processor import procesar_y_combinar_css
         print(f"\nIniciando procesamiento para RMDE...")
+        
+    elif revista_seleccionada == "cc":
+        from Modules.journals.cc.utils import extraer_id_de_carpeta, extraer_codigo_seccion, construir_clave_bitacora, es_carpeta_valida
+        from Modules.journals.cc.css_processor import procesar_y_combinar_css
+        print(f"\nIniciando procesamiento para Cuestiones Constitucionales (CC)...")
 
-        for nombre, ruta in carpetas:
-            revista_id = extraer_id_de_carpeta(nombre)
-            clave_bitacora = construir_clave_bitacora(nombre)
+    if not os.path.exists(ARCHIVOS_DIR):
+        print(f"\n  Error: No existe la carpeta de entrada '{ARCHIVOS_DIR}'")
+        return
 
-            if revista_id is None or clave_bitacora is None:
-                print(f"\n  Aviso: no se pudo extraer ID de {nombre}, se omite")
-                errores += 1
-                continue
+    carpetas = []
+    for item in os.listdir(ARCHIVOS_DIR):
+        ruta = os.path.join(ARCHIVOS_DIR, item)
+        if os.path.isdir(ruta) and not item.startswith("."):
+            carpetas.append((item, ruta))
 
-            procesada_en_bitacora_nueva = clave_bitacora in ids_procesados
-            procesada_en_bitacora_legacy = (
-                revista_id in ids_procesados and clave_bitacora.endswith(":art")
-            )
+    if not carpetas:
+        print(f"\n  No hay carpetas para procesar en '{ARCHIVOS_DIR}'")
+        return
 
-            if procesada_en_bitacora_nueva or procesada_en_bitacora_legacy:
-                print(f"\n  Saltando {nombre} (ID: {revista_id}) - ya procesado")
-                omitidas += 1
-                continue
+    ids_procesados = leer_bitacora(BITACORA_PATH)
+    inicio = time.time()
+    procesadas = 0
+    omitidas = 0
+    errores = 0
 
-            exito = procesar_revista_rmde(nombre, ruta)
+    for nombre, ruta in carpetas:
+        # 1. Ignorar las carpetas que no corresponden a la revista seleccionada
+        if not es_carpeta_valida(nombre):
+            continue
 
-            if exito:
-                registrar_en_bitacora(BITACORA_PATH, clave_bitacora)
-                ids_procesados.append(clave_bitacora)
-                procesadas += 1
-                print(f"  OK {nombre} procesada")
-            else:
-                errores += 1
-                print(f"  Error al procesar {nombre}")
+        revista_id = extraer_id_de_carpeta(nombre)
+        clave_bitacora = construir_clave_bitacora(nombre)
 
-        duracion = time.time() - inicio
-        print(f"\n{'=' * 60}")
-        print("  Resumen:")
-        print(f"     Procesadas: {procesadas}")
-        print(f"     Omitidas:   {omitidas}")
-        print(f"     Errores:    {errores}")
-        print(f"     Tiempo:     {duracion:.2f} s")
-        print("=" * 60)
+        if revista_id is None or clave_bitacora is None:
+            print(f"\n  Aviso: no se pudo extraer ID de {nombre}, se omite.")
+            errores += 1
+            continue
+
+        procesada_en_bitacora_nueva = clave_bitacora in ids_procesados
+        procesada_en_bitacora_legacy = (
+            revista_id in ids_procesados and clave_bitacora.endswith(":art")
+        )
+
+        if procesada_en_bitacora_nueva or procesada_en_bitacora_legacy:
+            print(f"\n  Saltando {nombre} (ID: {revista_id}) - ya procesado.")
+            omitidas += 1
+            continue
+
+        # 2. Configurar el procesador HTML con la fábrica de secciones
+        codigo_seccion = extraer_codigo_seccion(nombre)
+        procesador_html_configurado = obtener_procesador_por_seccion(revista_seleccionada, codigo_seccion)
+
+        # 3. Ejecutar procesamiento
+        exito = procesar_carpeta_revista(
+            nombre_carpeta=nombre, 
+            ruta_carpeta=ruta, 
+            procesador_css=procesar_y_combinar_css, 
+            procesador_html=procesador_html_configurado
+        )
+
+        if exito:
+            registrar_en_bitacora(BITACORA_PATH, clave_bitacora)
+            ids_procesados.append(clave_bitacora)
+            procesadas += 1
+            print(f"  OK {nombre} procesada.")
+        else:
+            errores += 1
+            print(f"  Error al procesar {nombre}.")
+
+    duracion = time.time() - inicio
+    print(f"\n{'=' * 60}")
+    print("  Resumen:")
+    print(f"     Procesadas: {procesadas}")
+    print(f"     Omitidas:   {omitidas}")
+    print(f"     Errores:    {errores}")
+    print(f"     Tiempo:     {duracion:.2f} s")
+    print("=" * 60)
 
 if __name__ == "__main__":
     main()
