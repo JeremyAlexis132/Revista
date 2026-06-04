@@ -3,7 +3,7 @@ Utilidades base para procesadores por sección de RMDE.
 """
 
 from typing import List
-from Modules.html_processor import procesar_html
+from Modules.journals.rmde.html_processor import procesar_html
 
 def procesar_seccion_base(
     html_path: str,

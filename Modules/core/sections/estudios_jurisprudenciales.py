@@ -1,8 +1,11 @@
 """
-Procesador de sección: Análisis de reformas electorales (ar).
+Procesador de sección: estudios jurisprudenciales (ej).
 """
 
-from Modules.sections.base import procesar_seccion_base
+from typing import List
+
+from Modules.core.sections.base import procesar_seccion_base
+
 
 def procesar(
     html_path: str,
@@ -15,5 +18,5 @@ def procesar(
         css_inline=css_inline,
         ruta_salida_html=ruta_salida_html,
         nombre_revista=nombre_revista,
-        tipo_articulo_forzado="Análisis de reformas electorales", # <-- Corregido aquí
+        tipo_articulo_forzado="Estudio jurisprudencial",
     )

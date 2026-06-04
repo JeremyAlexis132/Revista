@@ -5,11 +5,11 @@ Selector de procesador por sección para RMDE.
 import re
 from typing import Callable, Dict, Optional
 
-from Modules.sections import articulos
-from Modules.sections import analisis_regional
-from Modules.sections import estudios_jurisprudenciales
-from Modules.sections import notas_metodologicas
-from Modules.sections import observatorio_electoral
+from Modules.core.sections import articulos
+from Modules.core.sections import analisis_regional
+from Modules.core.sections import estudios_jurisprudenciales
+from Modules.core.sections import notas_metodologicas
+from Modules.core.sections import observatorio_electoral
 
 CODIGO_ARTICULOS = "art"
 CODIGOS_VALIDOS = {CODIGO_ARTICULOS, "nm", "ej", "ar", "oe"}

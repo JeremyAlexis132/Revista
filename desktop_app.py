@@ -27,9 +27,9 @@ from PySide6.QtWidgets import (
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_DIR)
 
-from Modules.css_processor import procesar_y_combinar_css
-from Modules.sections import obtener_procesador_por_seccion
-from Modules.utils import (
+from Modules.journals.rmde.css_processor import procesar_y_combinar_css
+from Modules.core.sections import obtener_procesador_por_seccion
+from Modules.journals.rmde.utils import (
     construir_clave_bitacora,
     crear_estructura_salida,
     copiar_imagenes,

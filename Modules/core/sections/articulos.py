@@ -1,10 +1,10 @@
 """
-Procesador de sección: notas metodológicas (nm).
+Procesador de sección: artículos (sin subíndice).
 """
 
 from typing import List
 
-from Modules.sections.base import procesar_seccion_base
+from Modules.core.sections.base import procesar_seccion_base
 
 
 def procesar(
@@ -18,5 +18,5 @@ def procesar(
         css_inline=css_inline,
         ruta_salida_html=ruta_salida_html,
         nombre_revista=nombre_revista,
-        tipo_articulo_forzado="Nota metodológica",
+        tipo_articulo_forzado="Artículo",
     )
