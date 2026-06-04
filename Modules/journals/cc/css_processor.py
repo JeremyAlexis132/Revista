@@ -8,27 +8,33 @@ from typing import List, Dict
 
 _BASE_FONT_PX = 12.0
 
-# Mapeo basado en el CSS generado para CC
 _FONT_SIZE_MAP: Dict[str, str] = {
+    "5px": "0.55em",
     "7px": "0.6em",
-    "9px": "0.8em",
-    "10px": "0.9em",
-    "11px": "1.0em",
+    "9px": "0.9em",
+    "10px": "1.1em",
+    "11px": "1.2em",
+    "12px": "1.3em",
 }
 
 _MARGIN_MAP: Dict[str, str] = {
     "0": "0",
+    "2px": "0.2em",
     "3px": "0.25em",
+    "4px": "0.4em",
+    "5px": "0.6em",
     "6px": "0.5em",
-    "12px": "1.0em",
-    "14px": "1.2em",
-    "15px": "1.25em",
-    "18px": "1.5em",
-    "24px": "2.0em",
-    "28px": "2.3em",
-    "29px": "2.4em",
-    "40px": "3.3em",
-    "46px": "3.8em",
+    "7px": "0.8em",
+    "12px": "1.3em",
+    "14px": "1.6em",
+    "15px": "1.65em",
+    "18px": "2.0em",
+    "24px": "2.7em",
+    "28px": "3.1em",
+    "29px": "3.2em",
+    "36px": "4.0em",
+    "40px": "4.4em",
+    "46px": "5.1em",
 }
 
 def _px_a_em(valor_px: str) -> str:
@@ -43,14 +49,20 @@ def _px_a_em(valor_px: str) -> str:
 
 def corregir_css(contenido_css: str) -> str:
     css = contenido_css
-    
-    # Correcciones de color transparentes a negros
     css = re.sub(r'color:\s*#0000\b', 'color:#000000', css)
     css = re.sub(r'border-color:\s*#0000\b', 'border-color:#000000', css)
-    
-    # Reemplazo de tamaños de fuente
+    css = re.sub(
+        r'border-(left|right|top|bottom)-color:\s*#0000\b',
+        r'border-\1-color:#000000',
+        css,
+    )
+
     for px_val, em_val in _FONT_SIZE_MAP.items():
-        css = re.sub(rf'font-size:\s*{re.escape(px_val)}', f'font-size:{em_val}', css)
+        css = re.sub(
+            rf'font-size:\s*{re.escape(px_val)}',
+            f'font-size:{em_val}',
+            css,
+        )
 
     def _reemplazar_margin(match: re.Match) -> str:
         prop = match.group(1)
@@ -59,17 +71,23 @@ def corregir_css(contenido_css: str) -> str:
             return f'{prop}:{_MARGIN_MAP[valor]}'
         return f'{prop}:{_px_a_em(valor)}'
 
-    # Reemplazo de márgenes e indentaciones
     css = re.sub(
         r'(margin-(?:top|bottom|left|right)|text-indent|padding-(?:top|bottom|left|right)):\s*(-?\d+(?:\.\d+)?px)',
         _reemplazar_margin,
         css,
     )
+
+    css = re.sub(
+        r'(p\.identificador\s*\{[^}]*?)color:\s*#58595b',
+        r'\1color:#58595b',
+        css,
+    )
+
     return css
 
 def generar_css_referencia() -> str:
     return """/* ============================================
-   CSS adicional — Formato de referencia Cuestiones Constitucionales
+   CSS adicional — Formato de referencia Homologado CC/RMDE
    ============================================ */
 
 .contenedor {
@@ -86,172 +104,216 @@ def generar_css_referencia() -> str:
     word-wrap: break-word;
 }
 
-/* Títulos */
-h1.titulo_espanol {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
-    font-size: 2em !important;
-    font-weight: bold !important;
-    text-align: center !important;
-    line-height: 1.22 !important;
-    margin: 0.8em 0 0.15em 0;
-    text-transform: uppercase;
+h1, h2, h3, h4, h5, h6,
+.tcc-final, .tcc-ingles, .titulo_espanol, .titulo_ingles, .VV, .IA, .romanos, .arabigos,
+.autor_final_2apellidos, .AUT-DOS-NOMBRES, .adscripcion, .nota-de-autor-final, .pais, .ORCID2,
+p.identificador, p.identificadorfinal, p.notas_iniciales, p.DOI,
+h6.como_citar {
+    text-align: left !important;
 }
 
-h2.titulo_ingles {
+h6.como_citar {
+    margin-top: 1.6em;
+    margin-bottom: 0.4em;
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
-    font-size: 1.25em !important;
-    font-style: italic;
+    font-size: 1.05em;
+    font-variant: small-caps;
     font-weight: normal;
-    text-align: center !important;
-    line-height: 1.2;
-    margin: 0 0 1.4em 0;
-    text-transform: uppercase;
+    text-indent: 0 !important;
+    margin-left: 0 !important;
 }
 
-/* Autores */
-p.AUT, p.AUT-DOS-NOMBRES {
-    text-align: center !important;
+[class*="TRANSCRIPCI"], [class*="Transcripci"], [class*="transcripci"], blockquote, p.trun {
+    font-size: 1em !important;
+    line-height: 1.5 !important;
     margin-top: 1.2em !important;
-    margin-bottom: 0.2em !important;
-    font-size: 1.05em !important;
-    font-weight: bold;
+    margin-bottom: 1.2em !important;
+    margin-left: 2.5em !important;
+    margin-right: 2.5em !important;
+    text-align: justify !important;
+    text-indent: 0 !important; 
 }
 
-p.ORCID, p.ORCID2 {
-    text-align: center !important;
-    margin-bottom: 0.2em !important;
-    margin-top: 0.2em !important;
-}
-
-.ORCID ._idSVGInline, .ORCID2 ._idSVGInline {
-    display: inline-block;
-    width: 1em;
-    height: 1em;
-}
-
-.ORCID svg, .ORCID2 svg {
-    width: 100%;
-    height: 100%;
+img {
+    max-width: 100%;
+    height: auto;
+    margin-left: 0 !important;
+    margin-right: auto !important;
     display: block;
+    margin-top: 1.4em;
+    margin-bottom: 1.4em;
 }
 
-p.nota-de-autor-final {
-    text-align: center !important;
-    font-size: 0.9em;
-    margin-top: 0;
-    margin-bottom: 0.2em;
+p:has(img), .image-block, figure {
+    margin-top: 1.4em !important;
+    margin-bottom: 1.4em !important;
 }
 
-/* Fechas y DOI */
-p.recepcion, p.aceptacion-publicacion, p.DOI {
-    text-align: right !important;
-    font-size: 0.85em;
-    color: #555;
-    margin: 0.2em 0;
+p.pp:has(img), p.body_text:has(img) {
+    text-align: left !important;
 }
 
-/* Resumen, Palabras clave, Cuerpo y Referencias */
-p.resumen, p.resumen_ingles, p.palabras-clave, p.keywords, 
-p.BODY-text, p.PP, p.SUMARIO, p.referencias {
+table {
+    margin-top: 1.4em !important;
+    margin-bottom: 1.4em !important;
+}
+
+.titulo-tabla-imagen {
+    display: block !important;
+    text-indent: 1.5em !important;
+    margin-top: 2.2em !important;
+    margin-bottom: 0.5em !important;
+    text-align: justify !important;
+}
+
+p.pp, p.body_text, p.BODY-text, p.SUMARIO, p.sumario,
+.resumenfinal, .abstract_final, .resumen, .resumen_ingles, .palabrasclave, .palabras-clave, .keywords_final, .keywords,
+p.bib, p.referencias, p.recepcion, p.aceptacion-publicacion, p.acerca-del-autor, p.publicacion {
     text-align: justify !important;
     text-align-last: left !important;
     hyphens: auto;
     -webkit-hyphens: auto;
-    font-size: 1em;
-    line-height: 1.6;
-    margin-bottom: 1em;
-}
-
-p.SUMARIO {
-    margin-left: 2em;
-    margin-right: 2em;
-    font-size: 0.9em;
-}
-
-/* Encabezados internos */
-h3.romanos {
-    text-align: center !important;
-    font-variant: small-caps;
-    font-size: 1.15em;
-    margin-top: 2em;
-    margin-bottom: 1em;
-}
-
-h4.arabigos {
-    text-align: left !important;
-    font-variant: small-caps;
-    font-size: 1.05em;
-    margin-top: 1.5em;
-    margin-bottom: 1em;
-}
-
-/* Citas largas */
-p.trun {
-    margin-left: 2em !important;
-    margin-right: 2em !important;
-    font-size: 0.9em !important;
-    text-align: justify !important;
-    line-height: 1.4;
-}
-
-/* Cómo Citar */
-p.como_citar {
-    text-align: center !important;
-    font-weight: bold;
-    color: #425c8a;
-    margin-top: 2.5em;
-}
-
-p.iijunam, p.APA {
-    font-weight: bold;
-    color: #003061;
-    margin-top: 1em;
-}
-
-/* Imágenes y Tablas */
-img {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    margin: 1.4em auto !important;
-}
-
-table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    margin: 1.4em 0 !important;
 }
 
 .table-responsive {
     width: 100%;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 1.5em 0;
 }
 
+table {
+    width: 100% !important;
+    max-width: 100%;
+    margin: 0 !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+}
+
+table col, table colgroup {
+    width: auto !important;
+}
+
+table td, table th {
+    width: auto !important;
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-size: 1em !important;
+    text-align: justify !important;
+    padding: 0.6em !important;
+    white-space: normal !important;
+    word-break: normal !important;
+}
+
+table p, table span, table div {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-size: 1em !important; 
+    text-align: justify !important;
+    white-space: normal !important;
+    line-height: 1.4 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    text-indent: 0 !important; 
+}
+
+.ORCID2 ._idSVGInline, .ORCID ._idSVGInline {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+}
+.ORCID2 svg, .ORCID svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.ORCID2 a, .ORCID a {
+    font-family: Garamond, serif;
+}
+.ORCID2, .ORCID {
+    margin-bottom: 0.2em !important;
+    margin-top: 1.2em !important;
+}
+
+p.autor_final_2apellidos, p.AUT-DOS-NOMBRES, p.AUT {
+    margin-top: 1.2em !important;
+    margin-bottom: 0.2em !important;
+    font-size: 1.05em !important;
+    font-variant: small-caps;
+    font-weight: bold;
+}
+
+p.adscripcion, p.nota-de-autor-final {
+    margin-top: 0 !important;
+    margin-bottom: 0.35em !important;
+    font-size: 0.95em !important;
+    line-height: 1.35 !important;
+}
+
+p.pais {
+    margin-top: 0 !important;
+    margin-bottom: 1.2em !important;
+    font-size: 0.95em !important;
+}
+
+p.pais + p.autor_final_2apellidos, p.adscripcion + p.autor_final_2apellidos,
+p.pais + p.AUT-DOS-NOMBRES, p.nota-de-autor-final + p.AUT-DOS-NOMBRES {
+    margin-top: 1.2em !important;
+}
+
+p.autor_final_2apellidos + p.resumenfinal, p.adscripcion + p.resumenfinal, p.pais + p.resumenfinal,
+p.AUT-DOS-NOMBRES + p.resumen, p.nota-de-autor-final + p.resumen, p.pais + p.resumen {
+    margin-top: 1.2em !important;
+}
+
+.resumenfinal, .resumen {
+    margin-top: 1.2em !important;
+}
+
+.tcc-final, h1.titulo_espanol {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
+    font-size: 2em !important;
+    font-weight: bold !important;
+    line-height: 1.22 !important;
+    margin: 0.8em 0 0.15em 0;
+}
+
+.tcc-ingles, h2.titulo_ingles {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
+    font-size: 1.25em !important;
+    font-style: italic;
+    font-weight: normal;
+    line-height: 1.2;
+    margin: 0 0 1.4em 0;
+}
+
+h3.VV, h3.romanos {
+    font-size: 1.35em !important;
+    margin-top: 1.9em;
+    margin-bottom: 1em;
+}
+
+h4.IA, h4.arabigos {
+    font-size: 1.2em !important;
+    margin-top: 1.2em;
+    margin-bottom: 0.8em;
+}
+
+.ORCID2 + p, .ORCID2 + p + p {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    line-height: 1.4;
+}
+
+ol._idFootAndEndNoteOLAttrs, ol._listStyleNone {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+    list-style-type: none;
+    text-align: justify !important;
+}
 section._idFootnotes {
     margin-top: 2em;
     border-top: 1px solid #ccc;
     padding-top: 1em;
     text-align: justify !important;
-    font-size: 0.85em;
-}
-
-a {
-    color: #275b9b;
-    text-decoration: none;
-}
-a:hover {
-    text-decoration: underline;
-}
-
-span.Hiperv-nculo {
-    color: #275b9b;
-    text-decoration: underline;
-}
-
-hr.HorizontalRule-1 {
-    border: none;
-    border-top: 1px solid #999;
-    margin: 2em 0 1em 0;
 }
 
 .Marco-de-texto-b-sico {
@@ -272,15 +334,113 @@ hr.HorizontalRule-1 {
     margin: 0;
     display: inline-block;
 }
+
+.Marco-de-texto-b-sico p.body_text2 span {
+    font-size: 1em !important;
+    font-family: inherit !important;
+    letter-spacing: normal !important;
+}
+
+.Marco-de-texto-b-sico p.body_text2.tipo-no-articulo {
+    font-size: 1.35em; 
+}
+
+p.notas_iniciales {
+    color: #58595b;
+    font-family: Garamond, serif;
+    font-size: 1em;
+    line-height: 1.6;
+    margin-bottom: 2em;
+}
+
+span.NOTA, span.NUMERO-NOTA, span._idGenCharOverride-1, span._idGenCharOverride-2 {
+    font-size: 0.85em;
+}
+
+p.notas_final {
+    color: #000000;
+    font-family: Garamond, serif;
+    font-size: 0.9em;
+    line-height: 1.45;
+    margin: 0;
+}
+
+p.notas_iniciales a, p.notas_iniciales span.hipervinculo, span.Hiperv-nculo,
+p.notas_final a, p.notas_final span.hipervinculo,
+.como_citar_section a, .como_citar_section span.hipervinculo,
+p.APA a, p.APA span.hipervinculo,
+p.iijunam a, p.iijunam span.hipervinculo {
+    color: #215e9e;
+    text-decoration: underline;
+}
+
+.como_citar_section {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+a {
+    color: #215e9e;
+    text-decoration: none;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+a:hover {
+    text-decoration: underline;
+}
+
+hr.HorizontalRule-1 {
+    border: none;
+    border-top: 1px solid #999;
+    margin: 2em 0 1em 0;
+}
+
+.no-separar {
+    white-space: normal !important;
+}
+
+span.Versalitas, span.versalita-OT, span.VERSALITAS, span.Versallitas {
+    font-variant: small-caps;
+    text-transform: none;
+}
+span.cursivas {
+    font-style: italic;
+    font-weight: normal;
+}
+
+.como_citar_section, .como_citar_section p, .como_citar_section div, p.APA, p.iijunam {
+    text-align: left !important;
+    text-indent: 0 !important;
+    margin-left: 0 !important;
+}
+
+@media (max-width: 768px) {
+    .contenedor {
+        padding: 4em 3% 1em 3%;
+    }
+    .Marco-de-texto-b-sico p.body_text2 {
+        font-size: 1.2em;
+    }
+    .Marco-de-texto-b-sico p.body_text2.tipo-no-articulo {
+        font-size: 1.2em;
+    }
+}
 """
 
 def procesar_y_combinar_css(rutas_css_origen: List[str]) -> str:
+    """Devuelve todo el CSS procesado como una única cadena de texto en vez de crear archivos."""
     css_final = []
+    
     for ruta_css in rutas_css_origen:
         try:
             with open(ruta_css, "r", encoding="utf-8") as f:
-                css_final.append(corregir_css(f.read()))
+                contenido = f.read()
         except (IOError, UnicodeDecodeError):
             continue
-    css_final.append(generar_css_referencia())
+            
+        contenido_corregido = corregir_css(contenido)
+        css_final.append(contenido_corregido)
+
+    css_referencia = generar_css_referencia()
+    css_final.append(css_referencia)
+
     return "\n".join(css_final)
