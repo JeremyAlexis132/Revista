@@ -1,5 +1,5 @@
 """
-Módulo para procesar y corregir archivos CSS de revistas académicas.
+Módulo para procesar y corregir archivos CSS específicos de RMDE.
 """
 
 import os
