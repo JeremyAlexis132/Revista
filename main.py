@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Gestor principal del procesador de revistas académicas.
+Procesa automáticamente todas las carpetas detectando a qué revista pertenecen.
 """
 
 import os
@@ -20,6 +21,25 @@ from Modules.core.utils_base import (
     registrar_en_bitacora,
 )
 
+# Importaciones de RMDE
+from Modules.journals.rmde.utils import (
+    extraer_id_de_carpeta as ext_id_rmde, 
+    extraer_codigo_seccion as ext_sec_rmde, 
+    construir_clave_bitacora as bitacora_rmde, 
+    es_carpeta_valida as valida_rmde
+)
+from Modules.journals.rmde.css_processor import procesar_y_combinar_css as css_rmde
+
+# Importaciones de CC
+from Modules.journals.cc.utils import (
+    extraer_id_de_carpeta as ext_id_cc, 
+    extraer_codigo_seccion as ext_sec_cc, 
+    construir_clave_bitacora as bitacora_cc, 
+    es_carpeta_valida as valida_cc
+)
+from Modules.journals.cc.css_processor import procesar_y_combinar_css as css_cc
+
+
 def resolver_archivos_dir() -> str:
     candidatos = ["Archivos", "archivos"]
     for nombre in candidatos:
@@ -34,32 +54,15 @@ BITACORA_PATH = os.path.join(PROJECT_DIR, "bitacora.json")
 
 def imprimir_banner() -> None:
     print("=" * 60)
-    print("  PROCESADOR DE REVISTAS ACADÉMICAS")
+    print("  PROCESADOR AUTOMÁTICO DE REVISTAS ACADÉMICAS")
     print("=" * 60)
-
-def seleccionar_revista() -> str:
-    while True:
-        print("\nSeleccione la revista a procesar:")
-        print("  1. Revista Mexicana de Derecho Electoral (RMDE)")
-        print("  2. Cuestiones Constitucionales (CC)")
-        print("  3. Salir")
-        opcion = input("\nIngrese el número de la opción: ").strip()
-
-        if opcion == "1":
-            return "rmde"
-        elif opcion == "2":
-            return "cc"
-        elif opcion == "3":
-            print("\n  Saliendo del programa...")
-            sys.exit(0)
-        else:
-            print("\n  [Error] Opción no válida. Por favor, intente de nuevo.")
 
 def procesar_carpeta_revista(
     nombre_carpeta: str, 
     ruta_carpeta: str, 
     procesador_css, 
-    procesador_html
+    procesador_html,
+    salida_base: str
 ) -> bool:
     """Flujo genérico de procesamiento aplicado a cualquier revista."""
     html_path = encontrar_html_en_carpeta(ruta_carpeta)
@@ -68,7 +71,9 @@ def procesar_carpeta_revista(
         return False
 
     css_paths = encontrar_css_en_carpeta(ruta_carpeta)
-    rutas = crear_estructura_salida(SALIDA_DIR, nombre_carpeta)
+    
+    # Crear la estructura dinámica en Salida/RMDE o Salida/CC
+    rutas = crear_estructura_salida(salida_base, nombre_carpeta)
 
     # 1. Obtener CSS unificado
     css_inline = procesador_css(css_paths)
@@ -86,22 +91,10 @@ def procesar_carpeta_revista(
 
 def main() -> None:
     imprimir_banner()
-
-    revista_seleccionada = seleccionar_revista()
-
-    # Importaciones dinámicas según la revista seleccionada
-    if revista_seleccionada == "rmde":
-        from Modules.journals.rmde.utils import extraer_id_de_carpeta, extraer_codigo_seccion, construir_clave_bitacora, es_carpeta_valida
-        from Modules.journals.rmde.css_processor import procesar_y_combinar_css
-        print(f"\nIniciando procesamiento para RMDE...")
-        
-    elif revista_seleccionada == "cc":
-        from Modules.journals.cc.utils import extraer_id_de_carpeta, extraer_codigo_seccion, construir_clave_bitacora, es_carpeta_valida
-        from Modules.journals.cc.css_processor import procesar_y_combinar_css
-        print(f"\nIniciando procesamiento para Cuestiones Constitucionales (CC)...")
+    print(f"\nIniciando procesamiento por lotes...\n")
 
     if not os.path.exists(ARCHIVOS_DIR):
-        print(f"\n  Error: No existe la carpeta de entrada '{ARCHIVOS_DIR}'")
+        print(f"  Error: No existe la carpeta de entrada '{ARCHIVOS_DIR}'")
         return
 
     carpetas = []
@@ -111,7 +104,7 @@ def main() -> None:
             carpetas.append((item, ruta))
 
     if not carpetas:
-        print(f"\n  No hay carpetas para procesar en '{ARCHIVOS_DIR}'")
+        print(f"  No hay carpetas para procesar en '{ARCHIVOS_DIR}'")
         return
 
     ids_procesados = leer_bitacora(BITACORA_PATH)
@@ -121,15 +114,28 @@ def main() -> None:
     errores = 0
 
     for nombre, ruta in carpetas:
-        # 1. Ignorar las carpetas que no corresponden a la revista seleccionada
-        if not es_carpeta_valida(nombre):
+        # Detectar la revista dinámicamente
+        if valida_rmde(nombre):
+            revista = "rmde"
+            ext_id = ext_id_rmde
+            ext_sec = ext_sec_rmde
+            const_bit = bitacora_rmde
+            proc_css = css_rmde
+        elif valida_cc(nombre):
+            revista = "cc"
+            ext_id = ext_id_cc
+            ext_sec = ext_sec_cc
+            const_bit = bitacora_cc
+            proc_css = css_cc
+        else:
+            print(f"  [Ignorado] '{nombre}': No cumple formato RMDE ni CC.")
             continue
 
-        revista_id = extraer_id_de_carpeta(nombre)
-        clave_bitacora = construir_clave_bitacora(nombre)
+        revista_id = ext_id(nombre)
+        clave_bitacora = const_bit(nombre)
 
         if revista_id is None or clave_bitacora is None:
-            print(f"\n  Aviso: no se pudo extraer ID de {nombre}, se omite.")
+            print(f"  [Aviso] No se pudo extraer ID de {nombre}, se omite.")
             errores += 1
             continue
 
@@ -139,34 +145,38 @@ def main() -> None:
         )
 
         if procesada_en_bitacora_nueva or procesada_en_bitacora_legacy:
-            print(f"\n  Saltando {nombre} (ID: {revista_id}) - ya procesado.")
+            print(f"  [Omitida] {nombre} - ya procesada previamente.")
             omitidas += 1
             continue
 
-        # 2. Configurar el procesador HTML con la fábrica de secciones
-        codigo_seccion = extraer_codigo_seccion(nombre)
-        procesador_html_configurado = obtener_procesador_por_seccion(revista_seleccionada, codigo_seccion)
+        # Obtener procesador
+        codigo_seccion = ext_sec(nombre)
+        procesador_html_configurado = obtener_procesador_por_seccion(revista, codigo_seccion)
 
-        # 3. Ejecutar procesamiento
+        # Generar subcarpeta contenedora (Salida/RMDE o Salida/CC)
+        salida_revista_dir = os.path.join(SALIDA_DIR, revista.upper())
+
+        # Ejecutar
         exito = procesar_carpeta_revista(
             nombre_carpeta=nombre, 
             ruta_carpeta=ruta, 
-            procesador_css=procesar_y_combinar_css, 
-            procesador_html=procesador_html_configurado
+            procesador_css=proc_css, 
+            procesador_html=procesador_html_configurado,
+            salida_base=salida_revista_dir
         )
 
         if exito:
             registrar_en_bitacora(BITACORA_PATH, clave_bitacora)
             ids_procesados.append(clave_bitacora)
             procesadas += 1
-            print(f"  OK {nombre} procesada.")
+            print(f"  [OK] {nombre} procesada correctamente en {revista.upper()}.")
         else:
             errores += 1
-            print(f"  Error al procesar {nombre}.")
+            print(f"  [Error] Fallo al procesar {nombre}.")
 
     duracion = time.time() - inicio
     print(f"\n{'=' * 60}")
-    print("  Resumen:")
+    print("  Resumen del Lote:")
     print(f"     Procesadas: {procesadas}")
     print(f"     Omitidas:   {omitidas}")
     print(f"     Errores:    {errores}")

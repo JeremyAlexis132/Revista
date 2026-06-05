@@ -1,5 +1,6 @@
 """
-Módulo para extraer y reestructurar HTML de revistas académicas.
+Módulo para extraer y reestructurar HTML de revistas académicas (RMDE).
+Soluciona bugs en la generación de enlaces de Creative Commons y DOI.
 """
 
 import os
@@ -120,47 +121,49 @@ def _extraer_url_doi(texto: str) -> str:
         url = "https://doi.org/" + url
     return url
 
+def _clases_de_elemento(elemento: Tag) -> List[str]:
+    clases = elemento.get("class", [])
+    if isinstance(clases, str):
+        return [clases]
+    return [str(c) for c in clases]
+
 def _normalizar_identificador_html(elemento: Tag, texto_plano: str) -> str:
     clases = " ".join(_clases_de_elemento(elemento)).lower()
     if "identificadorfinal" in clases:
         return texto_plano
-    if "creative commons" in (texto_plano or "").lower():
+        
+    texto_lower = (texto_plano or "").lower()
+    
+    # Corrección robusta para Creative Commons
+    if "creative commons" in texto_lower:
         cc_url = "https://creativecommons.org/licenses/by/4.0/"
-        match = re.search(r"^(.*?)(Licencia\s+Creative\s+Commons[^.]*)(\.?$)", texto_plano.strip(), re.IGNORECASE)
+        enlace_cc = elemento.find("a", href=True)
+        if enlace_cc and "creativecommons" in enlace_cc.get("href", ""):
+            cc_url = enlace_cc["href"].strip()
+            
+        match = re.search(r"^(.*?)(Licencia\s*)?(Creative\s+Commons.*?)(?:\.|$)", texto_plano.strip(), re.IGNORECASE)
         if match:
             prefijo = match.group(1).strip()
-            licencia = match.group(2).strip()
+            licencia_str = (match.group(2) or "") + match.group(3).strip()
             if prefijo:
-                return f'{prefijo} <a href="{cc_url}"><span class="hipervinculo">{licencia}</span></a>'
-            return f'<a href="{cc_url}"><span class="hipervinculo">{licencia}</span></a>'
-    if "doi" in (texto_plano or "").lower():
-        url_doi = ""
-        url_doi_texto = _extraer_url_doi(texto_plano)
-        enlace = elemento.find("a", href=True)
-        if enlace and enlace.get("href"):
-            href = enlace["href"].strip()
-            if "doi.org" in href or "10." in href:
-                url_doi = href
-        if url_doi_texto and (not url_doi or url_doi.lower() != url_doi_texto.lower()):
-            url_doi = url_doi_texto
-        elif not url_doi:
-            url_doi = url_doi_texto
+                return f'{prefijo} <a href="{cc_url}"><span class="hipervinculo">{licencia_str}</span></a>'
+            return f'<a href="{cc_url}"><span class="hipervinculo">{licencia_str}</span></a>'
+        return f'<a href="{cc_url}"><span class="hipervinculo">{texto_plano}</span></a>'
+
+    # Corrección robusta para DOI
+    if "doi" in texto_lower:
+        url_doi = _extraer_url_doi(texto_plano)
         if url_doi:
-            prefijo = texto_plano
-            match = re.search(r"\bDOI\s*:\s*", texto_plano, re.IGNORECASE)
-            if match:
-                prefijo = texto_plano[:match.end()].strip()
-            else:
-                prefijo = texto_plano.replace(url_doi, "").strip()
-                if prefijo.endswith(":"):
-                    prefijo = prefijo.rstrip()
+            prefijo = re.sub(r"(https?://[^\s]+|10\.\d+/[^\s]+)", "", texto_plano, flags=re.IGNORECASE).strip()
+            if prefijo.endswith(":"):
+                prefijo = prefijo.rstrip(":")
             if prefijo:
-                return f'{prefijo} <a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
+                return f'{prefijo}: <a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
             return f'<a href="{url_doi}"><span class="hipervinculo">{url_doi}</span></a>'
+
     return _obtener_html_interno(elemento)
 
 def _generar_identificadores_faltantes(contenido: ContenidoArticulo, nombre_revista: str) -> List[str]:
-    """Genera el bloque de metadatos inicial si este fue omitido en la exportación de InDesign."""
     if contenido.identificadores:
         return contenido.identificadores
 
@@ -180,11 +183,9 @@ def _generar_identificadores_faltantes(contenido: ContenidoArticulo, nombre_revi
                 meses_ano = match_vol.group(3).strip()
                 e_id = match_vol.group(4).strip()
             
-            # Buscar todos los DOIs posibles en el texto
             matches_doi = re.findall(r'(https?://(?:dx\.)?doi\.org/[^\s]+)', texto_plano, re.IGNORECASE)
             for doi_match in matches_doi:
                 doi_url = doi_match.rstrip(".,;")
-                # Validación estricta: el DOI debe terminar con el ID de la revista
                 if doi_url.endswith(revista_id):
                     doi_html = f'<a href="{doi_url}"><span class="hipervinculo">{doi_url}</span></a>'
                     break
@@ -252,12 +253,6 @@ def _limpiar_nombre_autor(elemento: Tag) -> str:
         if "orcid" in src:
             img.decompose()
     return "".join(str(child) for child in contenedor.children).strip()
-
-def _clases_de_elemento(elemento: Tag) -> List[str]:
-    clases = elemento.get("class", [])
-    if isinstance(clases, str):
-        return [clases]
-    return [str(c) for c in clases]
 
 def _tiene_orcid_en_bloque(elemento: Tag) -> bool:
     enlace = elemento.find("a", href=True)
@@ -342,7 +337,6 @@ def _extraer_autores_desde_documento(soup: BeautifulSoup) -> List[Autor]:
     elementos = [e for e in container.children if isinstance(e, Tag)]
     return _extraer_autores_desde_elementos(elementos)
 
-
 def extraer_contenido(html_path: str) -> ContenidoArticulo:
     with open(html_path, "r", encoding="utf-8") as f:
         soup = BeautifulSoup(f.read(), "html.parser")
@@ -377,8 +371,14 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     while idx < len(elementos):
         elem = elementos[idx]
         clases = " ".join(_clases_de_elemento(elem))
+        clases_lower = clases.lower()
         texto_limpio = _limpiar_texto(elem)
+        texto_lower = texto_limpio.lower()
         
+        if elem.name == "section" and "_idfootnotes" in clases_lower:
+            idx += 1
+            continue
+
         if fase in ["identificadores", "titulo_en", "autores", "autor_detalles", "resumen", "palabras_clave", "abstract", "keywords"]:
             if elem.name in ["h1", "h2", "h3"] or "VV" in clases:
                 if not ("tcc-final" in clases or "tcc-ingles" in clases):
@@ -389,7 +389,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         else:
             str_elem = str(elem)
 
-        if fase == "identificadores" and ("identificador" in clases):
+        if fase == "identificadores" and ("identificador" in clases_lower or "doi" in texto_lower or ("creative commons" in texto_lower and len(texto_limpio) < 200)):
             texto_plano = elem.get_text(" ", strip=True)
             html_interno = _normalizar_identificador_html(elem, texto_plano)
             texto_comparacion = texto_plano.replace(" ", "").lower()
@@ -422,7 +422,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             continue
 
         if fase == "autor_detalles":
-            if "adscripcion" in clases:
+            if "adscripcion" in clases_lower:
                 texto = _limpiar_texto(elem)
                 enlace_orcid = _extraer_orcid_desde_elemento(elem)
                 if enlace_orcid:
@@ -431,13 +431,14 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 else:
                     if autor_actual:
                         if autor_actual.adscripcion:
+                            # CORRECCIÓN DEL NAMEERROR: autor_actual en lugar de autor
                             separador = " | " if "|" in autor_actual.adscripcion or "|" in texto else "\n"
                             autor_actual.adscripcion += separador + texto
                         else:
                             autor_actual.adscripcion = texto
                 idx += 1
                 continue
-            elif "pais" in clases:
+            elif "pais" in clases_lower:
                 if autor_actual:
                     autor_actual.pais = _limpiar_texto(elem)
                 idx += 1
@@ -445,26 +446,26 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             else:
                 fase = "resumen"
 
-        if "resumenfinal" in clases:
+        if "resumenfinal" in clases_lower:
             contenido.resumen = _obtener_html_interno(elem)
             fase = "palabras_clave"
             idx += 1
             continue
 
-        if "palabrasclave" in clases:
+        if "palabrasclave" in clases_lower:
             contenido.palabras_clave = _obtener_html_interno(elem)
             fase = "abstract"
             idx += 1
             continue
 
-        if "abstract_final" in clases:
+        if "abstract_final" in clases_lower:
             contenido.abstract = _obtener_html_interno(elem)
             fase = "keywords"
             idx += 1
             continue
 
         if fase == "keywords":
-            if "keywords_final" in clases or "palabrasclave" in clases or texto_limpio.upper().startswith("KEYWORDS"):
+            if "keywords_final" in clases_lower or "palabrasclave" in clases_lower or texto_limpio.upper().startswith("KEYWORDS"):
                 contenido.keywords = _obtener_html_interno(elem)
                 fase = "cuerpo"
                 idx += 1
@@ -501,7 +502,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             es_acerca_de_autor = _es_acerca_de_autor(texto_limpio, clases)
             es_fecha = _es_fecha(texto_limpio, clases)
             
-            if "bib" in clases and not es_otros and not es_acerca_de_autor and not es_fecha:
+            if "bib" in clases_lower and not es_otros and not es_acerca_de_autor and not es_fecha:
                 contenido.referencias.append(str_elem)
                 idx += 1
                 continue
@@ -513,7 +514,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 continue
 
         if fase == "postcontenido":
-            if "como_citar" in clases or texto_limpio.upper() == "CÓMO CITAR":
+            if "como_citar" in clases_lower or texto_limpio.upper() == "CÓMO CITAR":
                 fase = "como_citar"
                 contenido.como_citar.append(str_elem)
                 idx += 1
@@ -532,7 +533,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                     elem["class"] = clases_limpias
                     str_elem = str(elem)
                 contenido.acerca_autores.append(str_elem)
-            elif "iijunam" in clases or "APA" in clases:
+            elif "iijunam" in clases_lower or "apa" in clases_lower:
                 fase = "como_citar"
                 contenido.como_citar.append(str_elem)
             else:
@@ -552,9 +553,9 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             continue
 
         if fase == "como_citar":
-            if elem.name == "hr" and "HorizontalRule-1" in clases:
+            if elem.name == "hr" and "horizontalrule-1" in clases_lower:
                 break
-            if elem.name == "section" and "_idFootnotes" in clases:
+            if elem.name == "section" and "_idfootnotes" in clases_lower:
                 break
             contenido.como_citar.append(str_elem)
             idx += 1

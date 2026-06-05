@@ -1,7 +1,7 @@
 """
 Módulo para extraer y reestructurar HTML específico de CC.
-Arma el documento siguiendo el formato visual de RMDE, garantizando líneas divisorias obligatorias
-para las fechas y solucionando errores tipográficos y fragmentación de InDesign.
+Arma el documento siguiendo el formato visual de RMDE, solucionando bugs de CC,
+errores tipográficos en DOI, fechas fragmentadas y neutralizando saltos de línea forzados.
 """
 
 import re
@@ -96,6 +96,18 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     with open(html_path, "r", encoding="utf-8") as f:
         soup = BeautifulSoup(f.read(), "html.parser")
         
+    # ==============================================================
+    # LIMPIEZA DE SALTOS DE LÍNEA Y CARACTERES INVISIBLES DE INDESIGN
+    # ==============================================================
+    # 1. Convierte los <br> (Soft returns) en espacios
+    for br in soup.find_all("br"):
+        br.replace_with(" ")
+
+    # 2. Elimina guiones blandos (\xad) y espacios de ancho cero (\u200b)
+    for text_node in soup.find_all(string=True):
+        if '\xad' in text_node or '\u200b' in text_node:
+            text_node.replace_with(text_node.replace('\xad', '').replace('\u200b', ''))
+
     for span in soup.find_all("span", class_="no-separar"):
         span.unwrap()
         
@@ -125,25 +137,17 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             contenido.doi_extraido = _extraer_url_doi(texto_limpio)
             continue
 
-        # ==============================================================
-        # DETECCIÓN DE FECHAS ULTRA SENSIBLE
-        # ==============================================================
         is_date_class = "recepcion" in clases or "aceptacion-publicacion" in clases
-        kw_match = re.search(r'\b(recepci[óo]n|recibido|aceptaci[óo]n|aceptado|publicaci[óo]n|publicado|aprobaci[óo]n|aprobado)\b', texto_lower)
+        has_date_kw = bool(re.search(r'\b(recepci[óo]n|recibido|aceptaci[óo]n|aceptado|publicaci[óo]n|publicado|aprobaci[óo]n|aprobado)\b', texto_lower))
+        has_digits = bool(re.search(r'\d', texto_lower))
         is_email_or_inst = "@" in texto_lower or "universidad" in texto_lower or "instituto" in texto_lower or "facultad" in texto_lower
 
         es_fecha = False
         if is_date_class and not is_email_or_inst:
             es_fecha = True
-        elif kw_match and not is_email_or_inst and len(texto_limpio) < 150:
-            if "bib" not in clases and "referencias" not in clases and "citar" not in texto_lower:
-                # Si la palabra clave está al principio del párrafo
-                if kw_match.start() < 30:
-                    # Y tiene números o es muy corto
-                    if bool(re.search(r'\d', texto_lower)) or len(texto_limpio) < 50:
-                        es_fecha = True
+        elif has_date_kw and (has_digits or len(texto_limpio) < 40) and not is_email_or_inst:
+            es_fecha = True
 
-        # Si es un correo camuflado como fecha por InDesign
         if is_date_class and not es_fecha and autor_actual and fase == "inicio":
             autor_actual.adscripciones_html.append(_obtener_html_interno(elem))
             capturando_fecha_fragmentada = False
@@ -155,16 +159,15 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             else:
                 contenido.fechas.append(texto_limpio)
             
-            capturando_fecha_fragmentada = not bool(re.search(r'\d', texto_limpio))
+            capturando_fecha_fragmentada = not has_digits
             continue
-        elif capturando_fecha_fragmentada and len(texto_limpio) < 80:
+        elif capturando_fecha_fragmentada and has_digits and len(texto_limpio) < 50:
             if contenido.fechas:
                 contenido.fechas[-1] += " " + texto_limpio
             capturando_fecha_fragmentada = False
             continue
         else:
             capturando_fecha_fragmentada = False
-        # ==============================================================
 
         if "titulo_espanol" in clases:
             contenido.titulo_es = str_elem
@@ -267,30 +270,21 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
             
     autores_html = _indentar_html(autores_html_list, 4)
 
-    # ==============================================================
-    # ARMADO ESTRICTO DE LÍNEAS DIVISORIAS AL FINAL DEL DOCUMENTO
-    # ==============================================================
     bloques_post = []
 
-    # 1. Línea inicial obligatoria antes del bloque de post-contenido
     if contenido.fechas or contenido.como_citar or contenido.notas_html:
         bloques_post.append('<hr class="HorizontalRule-1" />')
 
-    # 2. Bloque de fechas
     if contenido.fechas:
         fechas_unidas = "<br>\n\t\t\t\t".join(f for f in contenido.fechas if f)
         bloques_post.append(f'<p class="recepcion">{fechas_unidas}</p>')
-        # Línea obligatoria inmediatamente después de las fechas
-        bloques_post.append('<hr class="HorizontalRule-1" />') 
+        bloques_post.append('<hr class="HorizontalRule-1" />')
 
-    # 3. Bloque de Cómo citar
     if contenido.como_citar:
         como_citar_unidas = "\n\t\t\t\t".join(contenido.como_citar)
         bloques_post.append(f'<div class="como_citar_section">\n\t\t\t\t\t{como_citar_unidas}\n\t\t\t\t</div>')
-        # Línea obligatoria inmediatamente después del cómo citar
         bloques_post.append('<hr class="HorizontalRule-1" />')
 
-    # 4. Bloque de notas al pie
     if contenido.notas_html:
         bloques_post.append(contenido.notas_html)
 

@@ -1,8 +1,7 @@
 """
 Módulo para procesar y corregir archivos CSS específicos de CC.
-Aplica estrictamente la estética, tipografía y alineación visual de RMDE,
-eliminando sangrías indeseadas en texto normal, unificando el estilo de los autores,
-y garantizando que las tablas mantengan su formato con scroll horizontal en móviles.
+Unifica la tipografía a Times New Roman, homogeneiza tamaños,
+y neutraliza enlaces internos (como los del Sumario).
 """
 
 import os
@@ -46,7 +45,7 @@ def corregir_css(contenido_css: str) -> str:
 
 def generar_css_referencia() -> str:
     return """/* ============================================
-   CSS adicional — Formato visual RMDE aplicado a CC (Ajustes Finales)
+   CSS adicional — Formato visual unificado CC (Times New Roman)
    ============================================ */
 
 .contenedor, div[id^="_idContainer"], div[class^="_idGenObjectStyleOverride"] {
@@ -60,8 +59,8 @@ def generar_css_referencia() -> str:
     padding: 3em 5% 2em 5%;
     box-sizing: border-box;
     margin: 0 auto;
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
-    font-size: 17px; 
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 18px; /* Subimos un punto la base general */
     line-height: 1.6;
     word-wrap: break-word;
 }
@@ -74,6 +73,7 @@ h4.arabigos, h4.arabigos *,
 p.resumen *, p.resumen_ingles *, p.palabras-clave *, p.keywords *, p.SUMARIO * {
     font-weight: normal !important;
     color: #000000 !important;
+    font-family: 'Times New Roman', Times, serif !important;
 }
 
 h1.titulo_espanol, h2.titulo_ingles, h3.romanos, h4.arabigos,
@@ -81,12 +81,12 @@ p.AUT, p.AUT-DOS-NOMBRES, p.ORCID, p.nota-de-autor-final, p.correo, p.adscripcio
 p.recepcion, p.aceptacion-publicacion, p.DOI, p.como_citar, p.iijunam, p.APA, p.notas_iniciales {
     text-align: left !important;
     text-indent: 0 !important;
+    font-family: 'Times New Roman', Times, serif !important;
 }
 
 p.notas_iniciales {
     color: #58595b;
-    font-family: Garamond, serif;
-    font-size: 1em;
+    font-size: 1.1em !important;
     line-height: 1.6;
     margin-top: 0 !important;
     margin-bottom: 2em;
@@ -97,7 +97,6 @@ p.notas_iniciales a, p.notas_iniciales span.hipervinculo {
 }
 
 h1.titulo_espanol {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     font-size: 1.7em !important;
     font-weight: bold !important;
     line-height: 1.22 !important;
@@ -114,7 +113,6 @@ h1.titulo_espanol strong, h1.titulo_espanol span {
 }
 
 h2.titulo_ingles {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     font-size: 1.25em !important;
     font-style: italic !important;
     font-weight: normal !important;
@@ -143,8 +141,7 @@ h4.arabigos {
 }
 
 p.AUT, p.AUT-DOS-NOMBRES {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
-    font-size: 1.15em !important;
+    font-size: 1.2em !important;
     font-variant: small-caps !important;
     font-weight: bold !important;
     color: #000000 !important;
@@ -166,38 +163,34 @@ p.AUT strong, p.AUT span:not(._idSVGInline), p.AUT-DOS-NOMBRES strong, p.AUT-DOS
 p.nota-de-autor-final, p.correo, p.adscripcion {
     margin-top: 0 !important;
     margin-bottom: 0.35em !important;
-    font-size: 0.95em !important;
+    font-size: 1em !important;
     line-height: 1.35 !important;
     text-align: left !important;
 }
 
+/* =========================================================================
+   ELIMINACIÓN DE SANGRÍAS Y UNIFICACIÓN DE TAMAÑO (TEXTO NORMAL Y REFERENCIAS)
+   ========================================================================= */
 p.resumen, p.resumen_ingles, p.palabras-clave, p.keywords, 
-p.BODY-text, p.PP, p.body_text {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+p.BODY-text, p.PP, p.body_text,
+p.SUMARIO, p.referencias, p.NOTA-AL-PIE, section._idFootnotes p, 
+.como_citar_section p, p.iijunam, p.APA, ol._listStyleNone {
+    font-family: 'Times New Roman', Times, serif !important;
     text-align: justify !important;
     text-align-last: left !important;
     hyphens: auto;
-    font-size: 1.05em !important; 
+    font-size: 1.1em !important;
     line-height: 1.6 !important;
     text-indent: 0 !important;   
     margin-left: 0 !important;   
-}
-
-p.SUMARIO, p.referencias, p.NOTA-AL-PIE, section._idFootnotes p, 
-.como_citar_section p, p.como_citar, p.iijunam, p.APA, ol._listStyleNone {
-    margin-left: 0 !important;
     margin-right: 0 !important;
-    text-indent: 0 !important;
     padding-left: 0 !important;
-    text-align: justify !important;
-    text-align-last: left !important;
-    font-size: 1em !important;
 }
 
 p.recepcion, p.aceptacion-publicacion {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-family: 'Times New Roman', Times, serif !important;
     text-align: left !important;
-    font-size: 1em !important;
+    font-size: 1.1em !important;
     line-height: 1.6 !important;
     color: #000;
     margin-left: 0 !important;
@@ -205,9 +198,10 @@ p.recepcion, p.aceptacion-publicacion {
 }
 
 p.trun {
+    font-family: 'Times New Roman', Times, serif !important;
     margin-left: 2.5em !important;
     margin-right: 2.5em !important;
-    font-size: 1.05em !important;
+    font-size: 1.1em !important;
     text-align: justify !important;
     line-height: 1.5 !important;
     margin-top: 1.2em !important;
@@ -220,10 +214,13 @@ p.trun {
     margin-bottom: 0.5em;
 }
 p.como_citar {
+    font-family: 'Times New Roman', Times, serif !important;
     margin-top: 1.6em !important;
     margin-bottom: 0.4em !important;
-    font-size: 1.05em !important;
+    font-size: 1.1em !important;
     font-variant: small-caps !important;
+    text-align: left !important;
+    text-indent: 0 !important;
 }
 
 .ORCID ._idSVGInline, ._idSVGInline {
@@ -232,9 +229,21 @@ p.como_citar {
 .ORCID svg, ._idSVGInline svg {
     width: 100%; height: 100%; display: block;
 }
+
+/* ==========================================================
+   CONFIGURACIÓN DE ENLACES GLOBALES Y EXCEPCIONES
+   ========================================================== */
 a, span.Hiperv-nculo, span.hipervinculo {
     color: #215e9e !important;
     text-decoration: underline !important;
+}
+
+/* NEUTRALIZACIÓN DE ENLACES EN EL SUMARIO */
+p.SUMARIO a, p.SUMARIO span.Hiperv-nculo, p.SUMARIO span.hipervinculo,
+.sumario a, .sumario span.Hiperv-nculo, .sumario span.hipervinculo {
+    color: #000000 !important;
+    text-decoration: none !important;
+    pointer-events: none; /* Deshabilita el clic para que se comporte 100% como texto normal */
 }
 
 sup, sub, sup.NOTA, span.NUMERO-NOTA, span._idGenCharOverride-1, sup._idGenCharOverride-1, span._idGenCharOverride-2 {
@@ -253,7 +262,7 @@ hr.HorizontalRule-1 {
 }
 .Marco-de-texto-b-sico p.body_text2 {
     background-color: #386abd; color: #ffffff;
-    padding: 0.6em 1.2em; font-family: Garamond, serif;
+    padding: 0.6em 1.2em; font-family: 'Times New Roman', Times, serif !important;
     font-size: 1.35em; font-weight: bold;
     border-radius: 0 4px 4px 0; margin: 0; display: inline-block;
 }
@@ -281,13 +290,12 @@ table {
 }
 
 table td, table th {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-family: 'Times New Roman', Times, serif !important;
     font-size: 1em !important;
     text-align: justify !important;
     padding: 0.6em !important;
 }
 
-/* Fuerza el scroll horizontal en dispositivos móviles para que no se aplasten los textos */
 @media (max-width: 768px) {
     table {
         min-width: 600px !important;
