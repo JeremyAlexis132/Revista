@@ -83,7 +83,7 @@ p.resumen *, p.resumen_ingles *, p.palabras-clave *, p.keywords *, p.SUMARIO * {
 
 /* Alineación general a la izquierda (Estilo RMDE) */
 h1.titulo_espanol, h2.titulo_ingles, h3.romanos, h4.arabigos,
-p.AUT, p.AUT-DOS-NOMBRES, p.ORCID, p.nota-de-autor-final,
+p.AUT, p.AUT-DOS-NOMBRES, p.ORCID, p.nota-de-autor-final, p.correo, p.adscripcion,
 p.recepcion, p.aceptacion-publicacion, p.DOI, p.como_citar, p.iijunam, p.APA, p.notas_iniciales {
     text-align: left !important;
     text-indent: 0 !important;
@@ -108,7 +108,7 @@ p.notas_iniciales a, p.notas_iniciales span.hipervinculo {
    ========================================================== */
 h1.titulo_espanol {
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
-    font-size: 1.7em !important; /* Ajustado para que no sea excesivamente gigante */
+    font-size: 1.7em !important;
     font-weight: bold !important;
     line-height: 1.22 !important;
     margin: 0.8em 0 0.15em 0 !important;
@@ -168,8 +168,6 @@ p.AUT, p.AUT-DOS-NOMBRES {
     margin-bottom: 0.2em !important;
 }
 
-/* Igualamos el formato del texto interno (nombre/apellido) PERO le quitamos los márgenes
-   para evitar que el ícono del ORCID se empuje hacia la línea de abajo */
 p.AUT strong, p.AUT span:not(._idSVGInline), p.AUT-DOS-NOMBRES strong, p.AUT-DOS-NOMBRES span:not(._idSVGInline) {
     font-family: inherit !important;
     font-size: 1em !important;
@@ -181,11 +179,13 @@ p.AUT strong, p.AUT span:not(._idSVGInline), p.AUT-DOS-NOMBRES strong, p.AUT-DOS
     margin: 0 !important; 
 }
 
-p.nota-de-autor-final {
+/* Blindaje para alinear a la izquierda cualquier variante de información de contacto/adscripción */
+p.nota-de-autor-final, p.correo, p.adscripcion {
     margin-top: 0 !important;
     margin-bottom: 0.35em !important;
     font-size: 0.95em !important;
     line-height: 1.35 !important;
+    text-align: left !important;
 }
 
 /* Cuerpo y Resumen Justificados (Tamaño aumentado) */

@@ -1,7 +1,7 @@
 """
 Módulo para extraer y reestructurar HTML específico de CC.
-Arma el documento siguiendo el formato visual de RMDE, solucionando bugs de CC
-y previniendo la duplicación de notas al pie en las referencias.
+Arma el documento siguiendo el formato visual de RMDE, solucionando bugs de CC,
+errores tipográficos en DOI y garantizando una indentación HTML perfecta.
 """
 
 import re
@@ -38,32 +38,50 @@ class ContenidoArticulo:
 def _obtener_html_interno(elemento: Tag) -> str:
     return "".join(str(child) for child in elemento.children) if elemento else ""
 
+def _indentar_html(lista_html: List[str], tabs: int) -> str:
+    """Aplica la indentación correcta a cada línea para que el HTML final quede limpio y ordenado."""
+    if not lista_html:
+        return ""
+    espaciado = "\n" + ("\t" * tabs)
+    return espaciado.join(item.replace("\n", espaciado) for item in lista_html)
+
 def _extraer_url_doi(texto: str) -> str:
-    match = re.search(r"(https?://(?:dx\.)?doi\.org/[^\s]+|10\.\d{4,9}/[-._;()/:A-Z0-9]+)", texto.replace(" ", ""), re.IGNORECASE)
+    # FIX: Se utilizan comillas dobles externas para que la comilla simple interna no rompa el string
+    match = re.search(r"(https?://(?:dx\.)?doi\.org/[^\s<>\"']+)", texto.replace(" ", ""), re.IGNORECASE)
+    if not match: 
+        match = re.search(r"(10\.\d{4,9}/[-._;()/:A-Z0-9]+)", texto.replace(" ", ""), re.IGNORECASE)
     if not match: return ""
-    url = match.group(1).rstrip(".,;")
-    return url if url.startswith("http") else "https://doi.org/" + url
+    url = match.group(1).rstrip(".,;<>\"'")
+    url = url if url.startswith("http") else "https://doi.org/" + url
+    url = url.replace("10.22201/iij/", "10.22201/iij.")
+    return url
 
 def _generar_identificadores_cc(contenido: ContenidoArticulo, nombre_revista: str) -> List[str]:
-    """Genera la leyenda superior emulando a RMDE."""
     revista_id = str(nombre_revista.split('_')[0])
     vol_num = "[Vol(Núm)]"
     meses_ano = "[Meses de Año]"
     e_id = f"e{revista_id}"
-    
     doi_html = '<span class="hipervinculo">[colocar doi aquí]</span>'
 
     for cita in contenido.como_citar:
         texto_plano = BeautifulSoup(cita, "html.parser").get_text()
         if "Cuestiones Constitucionales" in texto_plano:
-            match_vol = re.search(r'vol\.\s*(\d+),\s*núm\.\s*(\d+),\s*([^,]+),\s*(e\d+)', texto_plano, re.IGNORECASE)
-            if match_vol:
-                vol_num = f"{match_vol.group(1)}({match_vol.group(2)})"
-                meses_ano = match_vol.group(3).strip()
-                e_id = match_vol.group(4).strip()
-            matches_doi = re.findall(r'(https?://(?:dx\.)?doi\.org/[^\s]+)', texto_plano, re.IGNORECASE)
+            vol_match = re.search(r'vol[^\d]*(\d+)', texto_plano, re.IGNORECASE)
+            num_match = re.search(r'n[úu]m[^\d]*(\d+)', texto_plano, re.IGNORECASE)
+            mes_match = re.search(r'([a-zA-Z]+\s*-\s*[a-zA-Z]+\s+(?:de\s+)?\d{4})', texto_plano, re.IGNORECASE)
+            eid_match = re.search(r'(e\d{4,6})', texto_plano, re.IGNORECASE)
+
+            if vol_match and num_match:
+                vol_num = f"{vol_match.group(1)}({num_match.group(1)})"
+            if mes_match:
+                meses_ano = mes_match.group(1).strip()
+            if eid_match:
+                e_id = eid_match.group(1).strip()
+                
+            # FIX: Sintaxis de regex corregida con comillas dobles
+            matches_doi = re.findall(r"(https?://(?:dx\.)?doi\.org/[^\s<>\"']+)", texto_plano, re.IGNORECASE)
             if matches_doi:
-                doi_url = matches_doi[0].rstrip(".,;")
+                doi_url = matches_doi[0].rstrip(".,;<>\"'").replace("10.22201/iij/", "10.22201/iij.")
                 doi_html = f'<a href="{doi_url}"><span class="hipervinculo">{doi_url}</span></a>'
             break
 
@@ -96,6 +114,8 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     fase = "inicio"
     autor_actual: Optional[Autor] = None
 
+    es_fecha_regex = r'(recepción|recibido|aceptación|aceptado|publicación|publicado)\s*:'
+
     for elem in elementos:
         clases = " ".join(elem.get("class", [])).lower()
         texto_limpio = elem.get_text(strip=False).strip()
@@ -109,14 +129,19 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             contenido.doi_extraido = _extraer_url_doi(texto_limpio)
             continue
 
-        if "recepcion" in clases or "aceptacion-publicacion" in clases or \
-           texto_lower.startswith(("recepción", "recibido", "aceptación", "aceptado", "publicación", "publicado")):
+        is_date_class = "recepcion" in clases or "aceptacion-publicacion" in clases
+        has_date_text = bool(re.search(es_fecha_regex, texto_lower))
+
+        if is_date_class and not has_date_text and autor_actual and fase == "inicio":
+            autor_actual.adscripciones_html.append(_obtener_html_interno(elem))
+            continue
+
+        if is_date_class or has_date_text:
             contenido.fechas.append(texto_limpio)
             continue
 
         if "titulo_espanol" in clases:
             contenido.titulo_es = str_elem
-            if "reseña" in texto_lower: contenido.tipo_articulo = "Reseña bibliográfica"
             continue
             
         if "titulo_ingles" in clases:
@@ -138,14 +163,15 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                     match = re.search(r"(https?://orcid\.org/[^\s]+)", texto_limpio)
                     if match: autor_actual.orcid_url = match.group(1).strip()
             continue
-            
-        if "nota-de-autor-final" in clases:
-            if autor_actual:
+
+        if fase == "inicio" and autor_actual and ("nota-de-autor-final" in clases or "adscripcion" in clases or "correo" in clases or "@" in texto_limpio or "universidad" in texto_lower or "instituto" in texto_lower or "facultad" in texto_lower):
+            if len(texto_limpio) < 200: 
                 autor_actual.adscripciones_html.append(_obtener_html_interno(elem))
-            continue
+                continue
 
         if "resumen" in clases and "resumen_ingles" not in clases:
             contenido.resumen = str_elem
+            fase = "cuerpo"
             continue
             
         if "palabras-clave" in clases:
@@ -201,7 +227,7 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
             id_lines.append(f'<br>{ident}')
         else:
             id_lines.append(f'<br>{ident}<br><br>')
-    identificadores_html = f'<p class="notas_iniciales">\t\n\t\t\t{"".join(id_lines)}\n\t\t</p>'
+    identificadores_html = f'<p class="notas_iniciales">\n\t\t\t{"".join(id_lines)}\n\t\t</p>'
     separador_identificadores = '\n\t\t<hr class="HorizontalRule-1" />'
     
     ORCID_SVG = """<a href="{url}" target="_blank" style="text-decoration: none; margin-left: 5px;"><span class="_idSVGInline" style="display: inline-block; width: 1em; height: 1em; vertical-align: middle;"><svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" style="width: 100%; height: 100%; display: block;"><style type="text/css">.st0{fill:#A6CE39;}.st1{fill:#FFFFFF;}</style><circle class="st0" cx="128" cy="128" r="128"/><g><path class="st1" d="M86.3,186.2H70.9V79.1h15.4v48.4V186.2z"/><path class="st1" d="M108.9,79.1h41.6c39.6,0,57,28.3,57,53.6c0,27.5-21.5,53.6-56.8,53.6h-41.8V79.1z M124.3,172.4h24.5c34.9,0,42.9-26.5,42.9-39.7c0-21.5-13.7-39.7-43.7-39.7h-23.7V172.4z"/><path class="st1" d="M88.7,56.8c0,5.5-4.5,10.1-10.1,10.1c-5.6,0-10.1-4.6-10.1-10.1c0-5.6,4.5-10.1,10.1-10.1C84.2,46.7,88.7,51.3,88.7,56.8z"/></g></svg></span></a>"""
@@ -213,7 +239,7 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
         for adscripcion in autor.adscripciones_html:
             autores_html_list.append(f'<p class="nota-de-autor-final">{adscripcion}</p>')
             
-    autores_html = "\n\t\t\t\t".join(autores_html_list)
+    autores_html = _indentar_html(autores_html_list, 4)
 
     bloques_post = []
     if contenido.fechas:
@@ -223,18 +249,20 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
 
     if contenido.como_citar:
         como_citar_unidas = "\n\t\t\t\t".join(contenido.como_citar)
-        bloques_post.append(f'<div class="como_citar_section">\n\t\t\t{como_citar_unidas}\n\t\t\t</div>')
+        bloques_post.append(f'<div class="como_citar_section">\n\t\t\t\t\t{como_citar_unidas}\n\t\t\t\t</div>')
         bloques_post.append('<hr class="HorizontalRule-1" />')
 
     if contenido.notas_html:
         bloques_post.append(contenido.notas_html)
 
-    post_html = "\n\t\t\t".join(bloques_post)
+    post_html = _indentar_html(bloques_post, 4)
+    cuerpo_html = _indentar_html(contenido.secciones_cuerpo, 4)
+    referencias_html = _indentar_html(contenido.referencias, 4)
+
     separador_referencias = ""
     if post_html and (contenido.referencias or contenido.secciones_cuerpo):
-         separador_referencias = '\n\t\t\t<hr class="HorizontalRule-1" />'
+         separador_referencias = '\n\t\t\t\t<hr class="HorizontalRule-1" />'
 
-    # AQUÍ ESTABA EL <br><br> QUE CAUSABA EL ESPACIO GIGANTE. LO HE ELIMINADO.
     html = f"""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="es-ES">
 \t<head>
@@ -258,8 +286,8 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
 \t\t\t\t{contenido.palabras_clave}
 \t\t\t\t{contenido.abstract}
 \t\t\t\t{contenido.keywords}
-\t\t\t\t{"".join(contenido.secciones_cuerpo)}
-\t\t\t\t{"".join(contenido.referencias)}
+\t\t\t\t{cuerpo_html}
+\t\t\t\t{referencias_html}
 \t\t\t\t{separador_referencias}
 \t\t\t\t{post_html}
 \t\t\t</div>
@@ -267,6 +295,8 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
 \t</body>
 </html>"""
 
+    # Limpieza final para no dejar líneas en blanco mal indentadas
+    html = re.sub(r'\n\s*\n', '\n', html)
     return html
 
 def _corregir_rutas_imagenes(html: str) -> str:
@@ -278,6 +308,9 @@ def _corregir_rutas_imagenes(html: str) -> str:
 def procesar_html(html_path: str, css_inline: str, ruta_salida_html: str, nombre_revista: str, tipo_articulo_forzado: Optional[str] = None) -> bool:
     try:
         contenido = extraer_contenido(html_path)
+        if tipo_articulo_forzado:
+            contenido.tipo_articulo = tipo_articulo_forzado
+            
         html_final = generar_html_referencia(contenido, css_inline, nombre_revista)
         html_final = _corregir_rutas_imagenes(html_final)
         html_final = re.sub(r'href="[^"#]*\.html(#[^"]+)"', r'href="\1"', html_final)
