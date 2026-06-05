@@ -1,5 +1,8 @@
 """
-Módulo para procesar y corregir archivos CSS específicos de Cuestiones Constitucionales (CC).
+Módulo para procesar y corregir archivos CSS específicos de CC.
+Aplica estrictamente la estética, tipografía y alineación visual de RMDE,
+eliminando sangrías indeseadas, unificando el estilo de los autores,
+ajustando márgenes superiores y deshabilitando negritas en subtítulos.
 """
 
 import os
@@ -9,438 +12,306 @@ from typing import List, Dict
 _BASE_FONT_PX = 12.0
 
 _FONT_SIZE_MAP: Dict[str, str] = {
-    "5px": "0.55em",
-    "7px": "0.6em",
-    "9px": "0.9em",
-    "10px": "1.1em",
-    "11px": "1.2em",
-    "12px": "1.3em",
+    "7px": "0.6em", "9px": "0.8em", "10px": "0.9em", "11px": "1.0em",
 }
 
 _MARGIN_MAP: Dict[str, str] = {
-    "0": "0",
-    "2px": "0.2em",
-    "3px": "0.25em",
-    "4px": "0.4em",
-    "5px": "0.6em",
-    "6px": "0.5em",
-    "7px": "0.8em",
-    "12px": "1.3em",
-    "14px": "1.6em",
-    "15px": "1.65em",
-    "18px": "2.0em",
-    "24px": "2.7em",
-    "28px": "3.1em",
-    "29px": "3.2em",
-    "36px": "4.0em",
-    "40px": "4.4em",
-    "46px": "5.1em",
+    "0": "0", "3px": "0.25em", "6px": "0.5em", "12px": "1.0em",
+    "14px": "1.2em", "15px": "1.25em", "18px": "1.5em", "24px": "2.0em",
 }
 
 def _px_a_em(valor_px: str) -> str:
     match = re.match(r"^(-?\d+(?:\.\d+)?)px$", valor_px.strip())
-    if not match:
-        return valor_px
+    if not match: return valor_px
     px_val = float(match.group(1))
-    if px_val == 0:
-        return "0"
-    em_val = round(px_val / _BASE_FONT_PX, 1)
-    return f"{em_val}em"
+    return "0" if px_val == 0 else f"{round(px_val / _BASE_FONT_PX, 1)}em"
 
 def corregir_css(contenido_css: str) -> str:
     css = contenido_css
     css = re.sub(r'color:\s*#0000\b', 'color:#000000', css)
     css = re.sub(r'border-color:\s*#0000\b', 'border-color:#000000', css)
-    css = re.sub(
-        r'border-(left|right|top|bottom)-color:\s*#0000\b',
-        r'border-\1-color:#000000',
-        css,
-    )
-
+    
     for px_val, em_val in _FONT_SIZE_MAP.items():
-        css = re.sub(
-            rf'font-size:\s*{re.escape(px_val)}',
-            f'font-size:{em_val}',
-            css,
-        )
+        css = re.sub(rf'font-size:\s*{re.escape(px_val)}', f'font-size:{em_val}', css)
 
     def _reemplazar_margin(match: re.Match) -> str:
-        prop = match.group(1)
-        valor = match.group(2).strip()
-        if valor in _MARGIN_MAP:
-            return f'{prop}:{_MARGIN_MAP[valor]}'
-        return f'{prop}:{_px_a_em(valor)}'
+        prop, valor = match.group(1), match.group(2).strip()
+        return f'{prop}:{_MARGIN_MAP.get(valor, _px_a_em(valor))}'
 
     css = re.sub(
         r'(margin-(?:top|bottom|left|right)|text-indent|padding-(?:top|bottom|left|right)):\s*(-?\d+(?:\.\d+)?px)',
-        _reemplazar_margin,
-        css,
+        _reemplazar_margin, css
     )
-
-    css = re.sub(
-        r'(p\.identificador\s*\{[^}]*?)color:\s*#58595b',
-        r'\1color:#58595b',
-        css,
-    )
-
     return css
 
 def generar_css_referencia() -> str:
     return """/* ============================================
-   CSS adicional — Formato de referencia Homologado CC/RMDE
+   CSS adicional — Formato visual RMDE aplicado a CC (Ajustes Finales)
    ============================================ */
 
-.contenedor {
+/* Asegurar anchos al 100% para evitar colapsos verticales */
+.contenedor, div[id^="_idContainer"], div[class^="_idGenObjectStyleOverride"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block !important;
     position: relative;
+}
+
+/* Tamaño de texto general aumentado */
+.contenedor {
     padding: 3em 5% 2em 5%;
-    max-width: 100%;
-    width: 100%;
     box-sizing: border-box;
     margin: 0 auto;
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
-    font-size: 16px;
-    line-height: 1.58;
-    overflow-wrap: break-word;
+    font-size: 17px; 
+    line-height: 1.6;
     word-wrap: break-word;
 }
 
-h1, h2, h3, h4, h5, h6,
-.tcc-final, .tcc-ingles, .titulo_espanol, .titulo_ingles, .VV, .IA, .romanos, .arabigos,
-.autor_final_2apellidos, .AUT-DOS-NOMBRES, .adscripcion, .nota-de-autor-final, .pais, .ORCID2,
-p.identificador, p.identificadorfinal, p.notas_iniciales, p.DOI,
-h6.como_citar {
-    text-align: left !important;
+/* ==========================================================
+   QUITA NEGRITAS: Obliga a texto normal en TODO (subtítulos, introducciones) 
+   ========================================================== */
+.grises-vv, .bold-grises-redondas, .bold-grises-italicas, .BOLD-ITALIC,
+strong.grises-vv, strong.bold-grises-redondas, span.bold-grises-italicas, strong.BOLD-ITALIC,
+h2.titulo_ingles, h2.titulo_ingles *,
+h3.romanos, h3.romanos *,
+h4.arabigos, h4.arabigos *,
+p.resumen *, p.resumen_ingles *, p.palabras-clave *, p.keywords *, p.SUMARIO * {
+    font-weight: normal !important;
+    color: #000000 !important;
 }
 
-h6.como_citar {
-    margin-top: 1.6em;
-    margin-bottom: 0.4em;
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
-    font-size: 1.05em;
-    font-variant: small-caps;
-    font-weight: normal;
+/* Alineación general a la izquierda (Estilo RMDE) */
+h1.titulo_espanol, h2.titulo_ingles, h3.romanos, h4.arabigos,
+p.AUT, p.AUT-DOS-NOMBRES, p.ORCID, p.nota-de-autor-final,
+p.recepcion, p.aceptacion-publicacion, p.DOI, p.como_citar, p.iijunam, p.APA, p.notas_iniciales {
+    text-align: left !important;
     text-indent: 0 !important;
-    margin-left: 0 !important;
 }
 
-[class*="TRANSCRIPCI"], [class*="Transcripci"], [class*="transcripci"], blockquote, p.trun {
-    font-size: 1em !important;
-    line-height: 1.5 !important;
-    margin-top: 1.2em !important;
-    margin-bottom: 1.2em !important;
-    margin-left: 2.5em !important;
-    margin-right: 2.5em !important;
-    text-align: justify !important;
-    text-indent: 0 !important; 
-}
-
-img {
-    max-width: 100%;
-    height: auto;
-    margin-left: 0 !important;
-    margin-right: auto !important;
-    display: block;
-    margin-top: 1.4em;
-    margin-bottom: 1.4em;
-}
-
-p:has(img), .image-block, figure {
-    margin-top: 1.4em !important;
-    margin-bottom: 1.4em !important;
-}
-
-p.pp:has(img), p.body_text:has(img) {
-    text-align: left !important;
-}
-
-table {
-    margin-top: 1.4em !important;
-    margin-bottom: 1.4em !important;
-}
-
-.titulo-tabla-imagen {
-    display: block !important;
-    text-indent: 1.5em !important;
-    margin-top: 2.2em !important;
-    margin-bottom: 0.5em !important;
-    text-align: justify !important;
-}
-
-p.pp, p.body_text, p.BODY-text, p.SUMARIO, p.sumario,
-.resumenfinal, .abstract_final, .resumen, .resumen_ingles, .palabrasclave, .palabras-clave, .keywords_final, .keywords,
-p.bib, p.referencias, p.recepcion, p.aceptacion-publicacion, p.acerca-del-autor, p.publicacion {
-    text-align: justify !important;
-    text-align-last: left !important;
-    hyphens: auto;
-    -webkit-hyphens: auto;
-}
-
-.table-responsive {
-    width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin: 1.5em 0;
-}
-
-table {
-    width: 100% !important;
-    max-width: 100%;
-    margin: 0 !important;
-    border-collapse: collapse !important;
-    table-layout: auto !important;
-}
-
-table col, table colgroup {
-    width: auto !important;
-}
-
-table td, table th {
-    width: auto !important;
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
-    font-size: 1em !important;
-    text-align: justify !important;
-    padding: 0.6em !important;
-    white-space: normal !important;
-    word-break: normal !important;
-}
-
-table p, table span, table div {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
-    font-size: 1em !important; 
-    text-align: justify !important;
-    white-space: normal !important;
-    line-height: 1.4 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    text-indent: 0 !important; 
-}
-
-.ORCID2 ._idSVGInline, .ORCID ._idSVGInline {
-    display: inline-block;
-    width: 1em;
-    height: 1em;
-}
-.ORCID2 svg, .ORCID svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-}
-.ORCID2 a, .ORCID a {
+/* Identificadores (Leyenda superior ajustada al margen exacto tras quitar los <br>) */
+p.notas_iniciales {
+    color: #58595b;
     font-family: Garamond, serif;
+    font-size: 1em;
+    line-height: 1.6;
+    margin-top: 0 !important; /* Ajuste perfecto a la etiqueta superior */
+    margin-bottom: 2em;
 }
-.ORCID2, .ORCID {
-    margin-bottom: 0.2em !important;
-    margin-top: 1.2em !important;
-}
-
-p.autor_final_2apellidos, p.AUT-DOS-NOMBRES, p.AUT {
-    margin-top: 1.2em !important;
-    margin-bottom: 0.2em !important;
-    font-size: 1.05em !important;
-    font-variant: small-caps;
-    font-weight: bold;
+p.notas_iniciales a, p.notas_iniciales span.hipervinculo {
+    color: #215e9e;
+    text-decoration: underline;
 }
 
-p.adscripcion, p.nota-de-autor-final {
+/* ==========================================================
+   EXCEPCIÓN DE NEGRITAS 1: Título Principal SÍ va en negritas y tamaño ajustado
+   ========================================================== */
+h1.titulo_espanol {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-size: 1.7em !important; /* Ajustado para que no sea excesivamente gigante */
+    font-weight: bold !important;
+    line-height: 1.22 !important;
+    margin: 0.8em 0 0.15em 0 !important;
+    -webkit-hyphens: none !important;
+    hyphens: none !important;
+}
+
+/* Protege el contenido interno del título para que no herede márgenes extraños */
+h1.titulo_espanol strong, h1.titulo_espanol span {
+    font-family: inherit !important;
+    font-size: 1em !important;
+    font-weight: bold !important;
+    margin: 0 !important;
+}
+
+/* Título en inglés sin negritas */
+h2.titulo_ingles {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-size: 1.25em !important;
+    font-style: italic !important;
+    font-weight: normal !important;
+    line-height: 1.2 !important;
+    margin: 0 0 1.4em 0 !important;
+}
+
+h2.titulo_ingles strong, h2.titulo_ingles span {
+    font-family: inherit !important;
+    font-size: 1em !important;
+    font-style: italic !important;
+    font-weight: normal !important;
+    margin: 0 !important;
+}
+
+/* Subtítulos más grandes pero en texto normal */
+h3.romanos {
+    font-size: 1.35em !important; 
+    margin-top: 1.6em !important;
+    margin-bottom: 0.8em !important;
+}
+
+h4.arabigos {
+    font-size: 1.25em !important;
+    margin-top: 1.2em !important;
+    margin-bottom: 0.8em !important;
+}
+
+/* ==========================================================
+   EXCEPCIÓN DE NEGRITAS 2: Uniformidad Total en Autores y arreglo de ORCID
+   ========================================================== */
+p.AUT, p.AUT-DOS-NOMBRES {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-size: 1.15em !important;
+    font-variant: small-caps !important;
+    font-weight: bold !important;
+    color: #000000 !important;
+    margin-top: 1.2em !important;
+    margin-bottom: 0.2em !important;
+}
+
+/* Igualamos el formato del texto interno (nombre/apellido) PERO le quitamos los márgenes
+   para evitar que el ícono del ORCID se empuje hacia la línea de abajo */
+p.AUT strong, p.AUT span:not(._idSVGInline), p.AUT-DOS-NOMBRES strong, p.AUT-DOS-NOMBRES span:not(._idSVGInline) {
+    font-family: inherit !important;
+    font-size: 1em !important;
+    font-variant: small-caps !important;
+    font-weight: bold !important;
+    font-style: normal !important;
+    color: #000000 !important;
+    letter-spacing: normal !important;
+    margin: 0 !important; 
+}
+
+p.nota-de-autor-final {
     margin-top: 0 !important;
     margin-bottom: 0.35em !important;
     font-size: 0.95em !important;
     line-height: 1.35 !important;
 }
 
-p.pais {
-    margin-top: 0 !important;
-    margin-bottom: 1.2em !important;
-    font-size: 0.95em !important;
-}
-
-p.pais + p.autor_final_2apellidos, p.adscripcion + p.autor_final_2apellidos,
-p.pais + p.AUT-DOS-NOMBRES, p.nota-de-autor-final + p.AUT-DOS-NOMBRES {
-    margin-top: 1.2em !important;
-}
-
-p.autor_final_2apellidos + p.resumenfinal, p.adscripcion + p.resumenfinal, p.pais + p.resumenfinal,
-p.AUT-DOS-NOMBRES + p.resumen, p.nota-de-autor-final + p.resumen, p.pais + p.resumen {
-    margin-top: 1.2em !important;
-}
-
-.resumenfinal, .resumen {
-    margin-top: 1.2em !important;
-}
-
-.tcc-final, h1.titulo_espanol {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
-    font-size: 2em !important;
-    font-weight: bold !important;
-    line-height: 1.22 !important;
-    margin: 0.8em 0 0.15em 0;
-}
-
-.tcc-ingles, h2.titulo_ingles {
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
-    font-size: 1.25em !important;
-    font-style: italic;
-    font-weight: normal;
-    line-height: 1.2;
-    margin: 0 0 1.4em 0;
-}
-
-h3.VV, h3.romanos {
-    font-size: 1.35em !important;
-    margin-top: 1.9em;
-    margin-bottom: 1em;
-}
-
-h4.IA, h4.arabigos {
-    font-size: 1.2em !important;
-    margin-top: 1.2em;
-    margin-bottom: 0.8em;
-}
-
-.ORCID2 + p, .ORCID2 + p + p {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    line-height: 1.4;
-}
-
-ol._idFootAndEndNoteOLAttrs, ol._listStyleNone {
-    margin-left: 0 !important;
-    padding-left: 0 !important;
-    list-style-type: none;
+/* Cuerpo y Resumen Justificados (Tamaño aumentado) */
+p.resumen, p.resumen_ingles, p.palabras-clave, p.keywords, 
+p.BODY-text, p.PP {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     text-align: justify !important;
+    text-align-last: left !important;
+    hyphens: auto;
+    font-size: 1.05em !important; 
+    line-height: 1.6 !important;
+}
+
+/* Eliminación total de sangrías indeseadas */
+p.SUMARIO, p.referencias, p.NOTA-AL-PIE, section._idFootnotes p, 
+.como_citar_section p, p.como_citar, p.iijunam, p.APA, ol._listStyleNone {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    text-indent: 0 !important;
+    padding-left: 0 !important;
+    text-align: justify !important;
+    text-align-last: left !important;
+    font-size: 1em !important;
+}
+
+/* Fechas trasladadas al fondo sin sangrías */
+p.recepcion, p.aceptacion-publicacion {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    text-align: left !important;
+    font-size: 1em !important;
+    line-height: 1.6 !important;
+    color: #000;
+    margin-left: 0 !important;
+    text-indent: 0 !important;
+}
+
+/* Transcripciones */
+p.trun {
+    margin-left: 2.5em !important;
+    margin-right: 2.5em !important;
+    font-size: 1.05em !important;
+    text-align: justify !important;
+    line-height: 1.5 !important;
+    margin-top: 1.2em !important;
+    margin-bottom: 1.2em !important;
+    text-indent: 0 !important; 
+}
+
+/* Cómo Citar */
+.como_citar_section {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+p.como_citar {
+    margin-top: 1.6em !important;
+    margin-bottom: 0.4em !important;
+    font-size: 1.05em !important;
+    font-variant: small-caps !important;
+}
+
+/* SVG y Enlaces */
+.ORCID ._idSVGInline, ._idSVGInline {
+    display: inline-block; width: 1em; height: 1em;
+}
+.ORCID svg, ._idSVGInline svg {
+    width: 100%; height: 100%; display: block;
+}
+a, span.Hiperv-nculo, span.hipervinculo {
+    color: #215e9e !important;
+    text-decoration: underline !important;
+}
+
+/* Superíndices de Notas al pie */
+sup, sub, sup.NOTA, span.NUMERO-NOTA, span._idGenCharOverride-1, sup._idGenCharOverride-1, span._idGenCharOverride-2 {
+    font-size: 1.05em !important; 
+    vertical-align: super !important;
+    line-height: 0;
+}
+
+/* Misceláneos */
+hr.HorizontalRule-1 {
+    border: none;
+    border-top: 1px solid #999;
+    margin: 2em 0 1em 0;
+}
+.Marco-de-texto-b-sico {
+    position: absolute; top: 0; left: 0; z-index: 100;
+}
+.Marco-de-texto-b-sico p.body_text2 {
+    background-color: #386abd; color: #ffffff;
+    padding: 0.6em 1.2em; font-family: Garamond, serif;
+    font-size: 1.35em; font-weight: bold;
+    border-radius: 0 4px 4px 0; margin: 0; display: inline-block;
+}
+img {
+    max-width: 100%; height: auto;
+    margin: 1.4em auto !important; display: block;
+}
+table {
+    width: 100% !important;
+    max-width: 100%;
+    margin: 1.4em 0 !important;
+    border-collapse: collapse !important;
+}
+table td, table th {
+    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
+    font-size: 1em !important;
+    text-align: justify !important;
+    padding: 0.6em !important;
 }
 section._idFootnotes {
     margin-top: 2em;
     border-top: 1px solid #ccc;
     padding-top: 1em;
     text-align: justify !important;
-}
-
-.Marco-de-texto-b-sico {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 100;
-}
-.Marco-de-texto-b-sico p.body_text2 {
-    background-color: #386abd;
-    color: #ffffff;
-    padding: 0.6em 1.2em;
-    font-family: Garamond, 'EB Garamond', 'Times New Roman', serif;
-    font-size: 1.35em;
-    font-weight: bold;
-    writing-mode: horizontal-tb;
-    border-radius: 0 4px 4px 0;
-    margin: 0;
-    display: inline-block;
-}
-
-.Marco-de-texto-b-sico p.body_text2 span {
-    font-size: 1em !important;
-    font-family: inherit !important;
-    letter-spacing: normal !important;
-}
-
-.Marco-de-texto-b-sico p.body_text2.tipo-no-articulo {
-    font-size: 1.35em; 
-}
-
-p.notas_iniciales {
-    color: #58595b;
-    font-family: Garamond, serif;
-    font-size: 1em;
-    line-height: 1.6;
-    margin-bottom: 2em;
-}
-
-span.NOTA, span.NUMERO-NOTA, span._idGenCharOverride-1, span._idGenCharOverride-2 {
-    font-size: 0.85em;
-}
-
-p.notas_final {
-    color: #000000;
-    font-family: Garamond, serif;
-    font-size: 0.9em;
-    line-height: 1.45;
-    margin: 0;
-}
-
-p.notas_iniciales a, p.notas_iniciales span.hipervinculo, span.Hiperv-nculo,
-p.notas_final a, p.notas_final span.hipervinculo,
-.como_citar_section a, .como_citar_section span.hipervinculo,
-p.APA a, p.APA span.hipervinculo,
-p.iijunam a, p.iijunam span.hipervinculo {
-    color: #215e9e;
-    text-decoration: underline;
-}
-
-.como_citar_section {
-    margin-top: 1em;
-    margin-bottom: 0.5em;
-}
-a {
-    color: #215e9e;
-    text-decoration: none;
-    overflow-wrap: break-word;
-    word-break: break-word;
-}
-a:hover {
-    text-decoration: underline;
-}
-
-hr.HorizontalRule-1 {
-    border: none;
-    border-top: 1px solid #999;
-    margin: 2em 0 1em 0;
-}
-
-.no-separar {
-    white-space: normal !important;
-}
-
-span.Versalitas, span.versalita-OT, span.VERSALITAS, span.Versallitas {
-    font-variant: small-caps;
-    text-transform: none;
-}
-span.cursivas {
-    font-style: italic;
-    font-weight: normal;
-}
-
-.como_citar_section, .como_citar_section p, .como_citar_section div, p.APA, p.iijunam {
-    text-align: left !important;
-    text-indent: 0 !important;
     margin-left: 0 !important;
-}
-
-@media (max-width: 768px) {
-    .contenedor {
-        padding: 4em 3% 1em 3%;
-    }
-    .Marco-de-texto-b-sico p.body_text2 {
-        font-size: 1.2em;
-    }
-    .Marco-de-texto-b-sico p.body_text2.tipo-no-articulo {
-        font-size: 1.2em;
-    }
+    padding-left: 0 !important;
 }
 """
 
 def procesar_y_combinar_css(rutas_css_origen: List[str]) -> str:
-    """Devuelve todo el CSS procesado como una única cadena de texto en vez de crear archivos."""
     css_final = []
-    
     for ruta_css in rutas_css_origen:
         try:
             with open(ruta_css, "r", encoding="utf-8") as f:
-                contenido = f.read()
-        except (IOError, UnicodeDecodeError):
-            continue
-            
-        contenido_corregido = corregir_css(contenido)
-        css_final.append(contenido_corregido)
-
-    css_referencia = generar_css_referencia()
-    css_final.append(css_referencia)
-
+                css_final.append(corregir_css(f.read()))
+        except (IOError, UnicodeDecodeError): continue
+    css_final.append(generar_css_referencia())
     return "\n".join(css_final)
