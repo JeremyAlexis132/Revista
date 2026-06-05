@@ -1,7 +1,7 @@
 """
 Módulo para extraer y reestructurar HTML específico de CC.
-Arma el documento siguiendo el formato visual de RMDE, solucionando bugs de CC,
-errores tipográficos en DOI y garantizando una indentación HTML perfecta.
+Arma el documento siguiendo el formato visual de RMDE, garantizando líneas divisorias obligatorias
+para las fechas y solucionando errores tipográficos y fragmentación de InDesign.
 """
 
 import re
@@ -39,14 +39,12 @@ def _obtener_html_interno(elemento: Tag) -> str:
     return "".join(str(child) for child in elemento.children) if elemento else ""
 
 def _indentar_html(lista_html: List[str], tabs: int) -> str:
-    """Aplica la indentación correcta a cada línea para que el HTML final quede limpio y ordenado."""
     if not lista_html:
         return ""
     espaciado = "\n" + ("\t" * tabs)
     return espaciado.join(item.replace("\n", espaciado) for item in lista_html)
 
 def _extraer_url_doi(texto: str) -> str:
-    # FIX: Se utilizan comillas dobles externas para que la comilla simple interna no rompa el string
     match = re.search(r"(https?://(?:dx\.)?doi\.org/[^\s<>\"']+)", texto.replace(" ", ""), re.IGNORECASE)
     if not match: 
         match = re.search(r"(10\.\d{4,9}/[-._;()/:A-Z0-9]+)", texto.replace(" ", ""), re.IGNORECASE)
@@ -78,7 +76,6 @@ def _generar_identificadores_cc(contenido: ContenidoArticulo, nombre_revista: st
             if eid_match:
                 e_id = eid_match.group(1).strip()
                 
-            # FIX: Sintaxis de regex corregida con comillas dobles
             matches_doi = re.findall(r"(https?://(?:dx\.)?doi\.org/[^\s<>\"']+)", texto_plano, re.IGNORECASE)
             if matches_doi:
                 doi_url = matches_doi[0].rstrip(".,;<>\"'").replace("10.22201/iij/", "10.22201/iij.")
@@ -91,7 +88,7 @@ def _generar_identificadores_cc(contenido: ContenidoArticulo, nombre_revista: st
     line1 = f"Cuestiones Constitucionales, Revista Mexicana de Derecho Constitucional, {vol_num}, {meses_ano}, {e_id}"
     line2 = f'e-ISSN: 2448-4881  DOI: {doi_html}'
     line3 = 'Esta obra está bajo una <a href="https://creativecommons.org/licenses/by/4.0/"><span class="hipervinculo">Licencia Creative Commons Reconocimiento 4.0 Internacional</span></a>'
-    line4 = '<span class="hipervinculo">Instituto de Investigaciones Jurídicas de la Universidad Nacional Autónoma de México</span>'
+    line4 = 'Instituto de Investigaciones Jurídicas de la Universidad Nacional Autónoma de México'
 
     return [line1, line2, line3, line4]
 
@@ -113,8 +110,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     elementos = [e for e in container.children if isinstance(e, Tag)]
     fase = "inicio"
     autor_actual: Optional[Autor] = None
-
-    es_fecha_regex = r'(recepción|recibido|aceptación|aceptado|publicación|publicado)\s*:'
+    capturando_fecha_fragmentada = False
 
     for elem in elementos:
         clases = " ".join(elem.get("class", [])).lower()
@@ -129,16 +125,46 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             contenido.doi_extraido = _extraer_url_doi(texto_limpio)
             continue
 
+        # ==============================================================
+        # DETECCIÓN DE FECHAS ULTRA SENSIBLE
+        # ==============================================================
         is_date_class = "recepcion" in clases or "aceptacion-publicacion" in clases
-        has_date_text = bool(re.search(es_fecha_regex, texto_lower))
+        kw_match = re.search(r'\b(recepci[óo]n|recibido|aceptaci[óo]n|aceptado|publicaci[óo]n|publicado|aprobaci[óo]n|aprobado)\b', texto_lower)
+        is_email_or_inst = "@" in texto_lower or "universidad" in texto_lower or "instituto" in texto_lower or "facultad" in texto_lower
 
-        if is_date_class and not has_date_text and autor_actual and fase == "inicio":
+        es_fecha = False
+        if is_date_class and not is_email_or_inst:
+            es_fecha = True
+        elif kw_match and not is_email_or_inst and len(texto_limpio) < 150:
+            if "bib" not in clases and "referencias" not in clases and "citar" not in texto_lower:
+                # Si la palabra clave está al principio del párrafo
+                if kw_match.start() < 30:
+                    # Y tiene números o es muy corto
+                    if bool(re.search(r'\d', texto_lower)) or len(texto_limpio) < 50:
+                        es_fecha = True
+
+        # Si es un correo camuflado como fecha por InDesign
+        if is_date_class and not es_fecha and autor_actual and fase == "inicio":
             autor_actual.adscripciones_html.append(_obtener_html_interno(elem))
+            capturando_fecha_fragmentada = False
             continue
 
-        if is_date_class or has_date_text:
-            contenido.fechas.append(texto_limpio)
+        if es_fecha:
+            if contenido.fechas and len(contenido.fechas[-1]) < 30 and not bool(re.search(r'\d', contenido.fechas[-1])):
+                contenido.fechas[-1] += " " + texto_limpio
+            else:
+                contenido.fechas.append(texto_limpio)
+            
+            capturando_fecha_fragmentada = not bool(re.search(r'\d', texto_limpio))
             continue
+        elif capturando_fecha_fragmentada and len(texto_limpio) < 80:
+            if contenido.fechas:
+                contenido.fechas[-1] += " " + texto_limpio
+            capturando_fecha_fragmentada = False
+            continue
+        else:
+            capturando_fecha_fragmentada = False
+        # ==============================================================
 
         if "titulo_espanol" in clases:
             contenido.titulo_es = str_elem
@@ -203,7 +229,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 contenido.como_citar.append(str_elem)
             continue
 
-        if texto_limpio or elem.name in ["table", "img"]:
+        if texto_limpio or elem.name in ["table", "img", "hr"]:
             if elem.name == "table":
                 str_elem = f'<div class="table-responsive">\n{elem}\n</div>'
             contenido.secciones_cuerpo.append(str_elem)
@@ -241,27 +267,36 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
             
     autores_html = _indentar_html(autores_html_list, 4)
 
+    # ==============================================================
+    # ARMADO ESTRICTO DE LÍNEAS DIVISORIAS AL FINAL DEL DOCUMENTO
+    # ==============================================================
     bloques_post = []
+
+    # 1. Línea inicial obligatoria antes del bloque de post-contenido
+    if contenido.fechas or contenido.como_citar or contenido.notas_html:
+        bloques_post.append('<hr class="HorizontalRule-1" />')
+
+    # 2. Bloque de fechas
     if contenido.fechas:
         fechas_unidas = "<br>\n\t\t\t\t".join(f for f in contenido.fechas if f)
         bloques_post.append(f'<p class="recepcion">{fechas_unidas}</p>')
-        bloques_post.append('<hr class="HorizontalRule-1" />')
+        # Línea obligatoria inmediatamente después de las fechas
+        bloques_post.append('<hr class="HorizontalRule-1" />') 
 
+    # 3. Bloque de Cómo citar
     if contenido.como_citar:
         como_citar_unidas = "\n\t\t\t\t".join(contenido.como_citar)
         bloques_post.append(f'<div class="como_citar_section">\n\t\t\t\t\t{como_citar_unidas}\n\t\t\t\t</div>')
+        # Línea obligatoria inmediatamente después del cómo citar
         bloques_post.append('<hr class="HorizontalRule-1" />')
 
+    # 4. Bloque de notas al pie
     if contenido.notas_html:
         bloques_post.append(contenido.notas_html)
 
     post_html = _indentar_html(bloques_post, 4)
     cuerpo_html = _indentar_html(contenido.secciones_cuerpo, 4)
     referencias_html = _indentar_html(contenido.referencias, 4)
-
-    separador_referencias = ""
-    if post_html and (contenido.referencias or contenido.secciones_cuerpo):
-         separador_referencias = '\n\t\t\t\t<hr class="HorizontalRule-1" />'
 
     html = f"""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="es-ES">
@@ -288,14 +323,12 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
 \t\t\t\t{contenido.keywords}
 \t\t\t\t{cuerpo_html}
 \t\t\t\t{referencias_html}
-\t\t\t\t{separador_referencias}
 \t\t\t\t{post_html}
 \t\t\t</div>
 \t\t</div>
 \t</body>
 </html>"""
 
-    # Limpieza final para no dejar líneas en blanco mal indentadas
     html = re.sub(r'\n\s*\n', '\n', html)
     return html
 

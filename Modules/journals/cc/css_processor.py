@@ -1,8 +1,8 @@
 """
 Módulo para procesar y corregir archivos CSS específicos de CC.
 Aplica estrictamente la estética, tipografía y alineación visual de RMDE,
-eliminando sangrías indeseadas, unificando el estilo de los autores,
-ajustando márgenes superiores y deshabilitando negritas en subtítulos.
+eliminando sangrías indeseadas en texto normal, unificando el estilo de los autores,
+y garantizando que las tablas mantengan su formato con scroll horizontal en móviles.
 """
 
 import os
@@ -49,7 +49,6 @@ def generar_css_referencia() -> str:
    CSS adicional — Formato visual RMDE aplicado a CC (Ajustes Finales)
    ============================================ */
 
-/* Asegurar anchos al 100% para evitar colapsos verticales */
 .contenedor, div[id^="_idContainer"], div[class^="_idGenObjectStyleOverride"] {
     width: 100% !important;
     max-width: 100% !important;
@@ -57,7 +56,6 @@ def generar_css_referencia() -> str:
     position: relative;
 }
 
-/* Tamaño de texto general aumentado */
 .contenedor {
     padding: 3em 5% 2em 5%;
     box-sizing: border-box;
@@ -68,9 +66,6 @@ def generar_css_referencia() -> str:
     word-wrap: break-word;
 }
 
-/* ==========================================================
-   QUITA NEGRITAS: Obliga a texto normal en TODO (subtítulos, introducciones) 
-   ========================================================== */
 .grises-vv, .bold-grises-redondas, .bold-grises-italicas, .BOLD-ITALIC,
 strong.grises-vv, strong.bold-grises-redondas, span.bold-grises-italicas, strong.BOLD-ITALIC,
 h2.titulo_ingles, h2.titulo_ingles *,
@@ -81,7 +76,6 @@ p.resumen *, p.resumen_ingles *, p.palabras-clave *, p.keywords *, p.SUMARIO * {
     color: #000000 !important;
 }
 
-/* Alineación general a la izquierda (Estilo RMDE) */
 h1.titulo_espanol, h2.titulo_ingles, h3.romanos, h4.arabigos,
 p.AUT, p.AUT-DOS-NOMBRES, p.ORCID, p.nota-de-autor-final, p.correo, p.adscripcion,
 p.recepcion, p.aceptacion-publicacion, p.DOI, p.como_citar, p.iijunam, p.APA, p.notas_iniciales {
@@ -89,13 +83,12 @@ p.recepcion, p.aceptacion-publicacion, p.DOI, p.como_citar, p.iijunam, p.APA, p.
     text-indent: 0 !important;
 }
 
-/* Identificadores (Leyenda superior ajustada al margen exacto tras quitar los <br>) */
 p.notas_iniciales {
     color: #58595b;
     font-family: Garamond, serif;
     font-size: 1em;
     line-height: 1.6;
-    margin-top: 0 !important; /* Ajuste perfecto a la etiqueta superior */
+    margin-top: 0 !important;
     margin-bottom: 2em;
 }
 p.notas_iniciales a, p.notas_iniciales span.hipervinculo {
@@ -103,9 +96,6 @@ p.notas_iniciales a, p.notas_iniciales span.hipervinculo {
     text-decoration: underline;
 }
 
-/* ==========================================================
-   EXCEPCIÓN DE NEGRITAS 1: Título Principal SÍ va en negritas y tamaño ajustado
-   ========================================================== */
 h1.titulo_espanol {
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     font-size: 1.7em !important;
@@ -116,7 +106,6 @@ h1.titulo_espanol {
     hyphens: none !important;
 }
 
-/* Protege el contenido interno del título para que no herede márgenes extraños */
 h1.titulo_espanol strong, h1.titulo_espanol span {
     font-family: inherit !important;
     font-size: 1em !important;
@@ -124,7 +113,6 @@ h1.titulo_espanol strong, h1.titulo_espanol span {
     margin: 0 !important;
 }
 
-/* Título en inglés sin negritas */
 h2.titulo_ingles {
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     font-size: 1.25em !important;
@@ -142,7 +130,6 @@ h2.titulo_ingles strong, h2.titulo_ingles span {
     margin: 0 !important;
 }
 
-/* Subtítulos más grandes pero en texto normal */
 h3.romanos {
     font-size: 1.35em !important; 
     margin-top: 1.6em !important;
@@ -155,9 +142,6 @@ h4.arabigos {
     margin-bottom: 0.8em !important;
 }
 
-/* ==========================================================
-   EXCEPCIÓN DE NEGRITAS 2: Uniformidad Total en Autores y arreglo de ORCID
-   ========================================================== */
 p.AUT, p.AUT-DOS-NOMBRES {
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     font-size: 1.15em !important;
@@ -179,7 +163,6 @@ p.AUT strong, p.AUT span:not(._idSVGInline), p.AUT-DOS-NOMBRES strong, p.AUT-DOS
     margin: 0 !important; 
 }
 
-/* Blindaje para alinear a la izquierda cualquier variante de información de contacto/adscripción */
 p.nota-de-autor-final, p.correo, p.adscripcion {
     margin-top: 0 !important;
     margin-bottom: 0.35em !important;
@@ -188,18 +171,18 @@ p.nota-de-autor-final, p.correo, p.adscripcion {
     text-align: left !important;
 }
 
-/* Cuerpo y Resumen Justificados (Tamaño aumentado) */
 p.resumen, p.resumen_ingles, p.palabras-clave, p.keywords, 
-p.BODY-text, p.PP {
+p.BODY-text, p.PP, p.body_text {
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     text-align: justify !important;
     text-align-last: left !important;
     hyphens: auto;
     font-size: 1.05em !important; 
     line-height: 1.6 !important;
+    text-indent: 0 !important;   
+    margin-left: 0 !important;   
 }
 
-/* Eliminación total de sangrías indeseadas */
 p.SUMARIO, p.referencias, p.NOTA-AL-PIE, section._idFootnotes p, 
 .como_citar_section p, p.como_citar, p.iijunam, p.APA, ol._listStyleNone {
     margin-left: 0 !important;
@@ -211,7 +194,6 @@ p.SUMARIO, p.referencias, p.NOTA-AL-PIE, section._idFootnotes p,
     font-size: 1em !important;
 }
 
-/* Fechas trasladadas al fondo sin sangrías */
 p.recepcion, p.aceptacion-publicacion {
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     text-align: left !important;
@@ -222,7 +204,6 @@ p.recepcion, p.aceptacion-publicacion {
     text-indent: 0 !important;
 }
 
-/* Transcripciones */
 p.trun {
     margin-left: 2.5em !important;
     margin-right: 2.5em !important;
@@ -234,7 +215,6 @@ p.trun {
     text-indent: 0 !important; 
 }
 
-/* Cómo Citar */
 .como_citar_section {
     margin-top: 1em;
     margin-bottom: 0.5em;
@@ -246,7 +226,6 @@ p.como_citar {
     font-variant: small-caps !important;
 }
 
-/* SVG y Enlaces */
 .ORCID ._idSVGInline, ._idSVGInline {
     display: inline-block; width: 1em; height: 1em;
 }
@@ -258,14 +237,12 @@ a, span.Hiperv-nculo, span.hipervinculo {
     text-decoration: underline !important;
 }
 
-/* Superíndices de Notas al pie */
 sup, sub, sup.NOTA, span.NUMERO-NOTA, span._idGenCharOverride-1, sup._idGenCharOverride-1, span._idGenCharOverride-2 {
     font-size: 1.05em !important; 
     vertical-align: super !important;
     line-height: 0;
 }
 
-/* Misceláneos */
 hr.HorizontalRule-1 {
     border: none;
     border-top: 1px solid #999;
@@ -280,22 +257,43 @@ hr.HorizontalRule-1 {
     font-size: 1.35em; font-weight: bold;
     border-radius: 0 4px 4px 0; margin: 0; display: inline-block;
 }
+
+/* =========================================================================
+   TABLAS RESPONSIVE Y MULTIMEDIA
+   ========================================================================= */
 img {
     max-width: 100%; height: auto;
     margin: 1.4em auto !important; display: block;
 }
+
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+    margin: 1.4em 0;
+}
+
 table {
     width: 100% !important;
-    max-width: 100%;
-    margin: 1.4em 0 !important;
     border-collapse: collapse !important;
+    margin: 0 !important;
 }
+
 table td, table th {
     font-family: Garamond, 'EB Garamond', 'Times New Roman', serif !important;
     font-size: 1em !important;
     text-align: justify !important;
     padding: 0.6em !important;
 }
+
+/* Fuerza el scroll horizontal en dispositivos móviles para que no se aplasten los textos */
+@media (max-width: 768px) {
+    table {
+        min-width: 600px !important;
+    }
+}
+
 section._idFootnotes {
     margin-top: 2em;
     border-top: 1px solid #ccc;
