@@ -1,5 +1,8 @@
 /Archivos/*
+/archivos/*
 .venv/
+venv/
+env/
 
 # Salida generada por el procesador
 /Salida/
