@@ -15,6 +15,7 @@ env/
 # Estado temporal de ejecucion
 bitacora.json
 /bitacora.json
+main_test.py
 
 # Basura de Python
 __pycache__/

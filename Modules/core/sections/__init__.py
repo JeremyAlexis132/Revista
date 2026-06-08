@@ -53,6 +53,17 @@ def obtener_procesador_por_seccion(revista: str, codigo_seccion: str) -> Callabl
             kwargs["tipo_articulo_forzado"] = detectar_tipo(contexto_busqueda)
             return procesar_cc(**kwargs)
         return procesador_wrapper_cc
+    
+    elif revista == "bmdc":
+        from Modules.journals.bmdc.html_processor import procesar_html as procesar_bmdc
+        def procesador_wrapper_bmdc(**kwargs):
+            ruta = kwargs.get("html_path", "")
+            carpeta = os.path.basename(os.path.dirname(ruta)) if ruta else ""
+            archivo = os.path.basename(ruta) if ruta else ""
+            contexto_busqueda = f"{carpeta} {archivo} {codigo_seccion}"
+            kwargs["tipo_articulo_forzado"] = detectar_tipo(contexto_busqueda)
+            return procesar_bmdc(**kwargs)
+        return procesador_wrapper_bmdc
 
     else:
         raise ValueError(f"La revista '{revista}' no está soportada.")
