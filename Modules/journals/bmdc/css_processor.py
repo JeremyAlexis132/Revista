@@ -1,7 +1,7 @@
 """
 Módulo para procesar y corregir archivos CSS específicos de BMDC.
 Unifica la tipografía a Times New Roman, neutraliza herencias de InDesign
-y corrige el espaciado de autores.
+y corrige el espaciado de autores, resúmenes, referencias y notas al pie.
 """
 
 import os
@@ -48,6 +48,12 @@ def generar_css_referencia() -> str:
    CSS adicional — Formato visual unificado BMDC
    ============================================ */
 
+/* Forzar Times New Roman en TODO el documento, anulando herencias de InDesign */
+*, *::before, *::after {
+    font-family: 'Times New Roman', Times, serif !important;
+    box-sizing: border-box;
+}
+
 .contenedor, div[id^="_idContainer"], div[class^="_idGenObjectStyleOverride"] {
     width: 100% !important;
     max-width: 100% !important;
@@ -65,14 +71,22 @@ def generar_css_referencia() -> str:
     word-wrap: break-word;
 }
 
+/* DESTRUCCIÓN GLOBAL DE SANGRÍAS */
+p {
+    text-indent: 0 !important;
+}
+
 /* =========================================================================
-   TÍTULOS (Neutralización de centrado y tamaños anómalos)
+   TÍTULOS (Neutralización de centrado, sangrías y tamaños anómalos)
    ========================================================================= */
 h1.titulo_espanol {
     font-family: 'Times New Roman', Times, serif !important;
     font-size: 1.7em !important;
     font-weight: bold !important;
     text-align: left !important;
+    text-indent: 0 !important;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
     line-height: 1.22 !important;
     margin: 0.8em 0 0.15em 0 !important;
     color: #000000 !important;
@@ -86,28 +100,40 @@ h2.titulo_ingles {
     font-style: italic !important;
     font-weight: normal !important;
     text-align: left !important;
+    text-indent: 0 !important;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
     line-height: 1.2 !important;
     margin: 0 0 1.4em 0 !important;
     color: #000000 !important;
 }
 
-/* Forzar todo lo que está dentro del título a respetar la jerarquía (ignorar spans internos) */
-h1.titulo_espanol * { font-size: 1em !important; text-align: left !important; font-weight: bold !important; }
-h2.titulo_ingles * { font-size: 1em !important; text-align: left !important; font-style: italic !important; font-weight: normal !important; }
+h1.titulo_espanol * { font-size: 1em !important; text-align: left !important; font-weight: bold !important; text-indent: 0 !important; margin-left: 0 !important; padding-left: 0 !important; }
+h2.titulo_ingles * { font-size: 1em !important; text-align: left !important; font-style: italic !important; font-weight: normal !important; text-indent: 0 !important; margin-left: 0 !important; padding-left: 0 !important; }
 
 /* =========================================================================
-   AUTORES (Sin espacio entre sus datos, margen solo por arriba)
+   AUTORES
    ========================================================================= */
-p.AUT-DOS-NOMBRES, p.AUT {
+p.AUT-DOS-NOMBRES, p.AUT, p.autor_item {
     font-family: 'Times New Roman', Times, serif !important;
     font-size: 1.2em !important;
     font-variant: small-caps !important;
     font-weight: bold !important;
+    font-style: normal !important;
     text-align: left !important;
     color: #000000 !important;
-    margin-top: 1.5em !important; /* Espacio para separar de otros autores o el título */
-    margin-bottom: 0 !important;  /* PEGADO a su afiliación */
+    margin-top: 1.5em !important;
+    margin-bottom: 0 !important;
     padding: 0 !important;
+    line-height: 1.4 !important;
+    text-indent: 0 !important;
+}
+
+p.AUT-DOS-NOMBRES *, p.AUT *, p.autor_item * {
+    font-size: 1em !important;
+    font-variant: inherit !important;
+    font-weight: inherit !important;
+    font-style: normal !important;
 }
 
 p.nota-de-autor-final {
@@ -116,10 +142,11 @@ p.nota-de-autor-final {
     font-weight: normal !important;
     text-align: left !important;
     color: #000000 !important;
-    margin-top: 0 !important; /* PEGADO a la línea de arriba */
-    margin-bottom: 0 !important; /* PEGADO al correo */
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
     padding: 0 !important;
     line-height: 1.35 !important;
+    text-indent: 0 !important;
 }
 
 p.AUT-DOS-NOMBRES *, p.nota-de-autor-final * {
@@ -127,11 +154,11 @@ p.AUT-DOS-NOMBRES *, p.nota-de-autor-final * {
 }
 
 /* =========================================================================
-   TEXTO GENERAL Y REFERENCIAS
+   TEXTO GENERAL Y RESÚMENES
    ========================================================================= */
-p.resumen, p.resumen_ingles, p.palabras-clave, p.keywords, 
-p.BODY-text, p.PP, p.body_text,
-p.SUMARIO, p.referencias, p.NOTA-AL-PIE, section._idFootnotes p, 
+p.resumen, p.resumen_ingles, p.palabras-clave, p.keywords, p.abstract,
+p.BODY-text, p.PP, p.body_text, p.ESTILOS-FINALES_BODY-text,
+p.SUMARIO, p.referencias, 
 .como_citar_section p, p.iijunam, p.APA, ol._listStyleNone {
     font-family: 'Times New Roman', Times, serif !important;
     text-align: justify !important;
@@ -145,13 +172,116 @@ p.SUMARIO, p.referencias, p.NOTA-AL-PIE, section._idFootnotes p,
     padding-left: 0 !important;
 }
 
-.grises-vv, .bold-grises-redondas, .bold-grises-italicas, .BOLD-ITALIC,
-h3.romanos, h3.romanos *, h4.arabigos, h4.arabigos *, p.resumen *, p.SUMARIO * {
+/* SEPARACIÓN EXACTA DE 1 ENTER ENTRE AUTORES Y RESUMEN */
+p.resumen, p.abstract {
+    margin-top: 1.6em !important;
+    margin-bottom: 0.8em !important;
+}
+
+p.palabras-clave, p.resumen_ingles, p.keywords {
+    margin-top: 0.8em !important; 
+    margin-bottom: 0.8em !important;
+}
+
+/* Anular el efecto miniatura de los spans de InDesign */
+p.resumen *, p.resumen_ingles *, p.palabras-clave *, p.keywords *, p.abstract *,
+p.BODY-text *, p.PP *, p.body_text *, p.ESTILOS-FINALES_BODY-text *, p.SUMARIO * {
+    font-size: 1em !important;
+    font-family: 'Times New Roman', Times, serif !important;
+    text-indent: 0 !important;
+    margin-left: 0 !important;
+}
+
+/* =========================================================================
+   REFERENCIAS: TEXTO PLANO Y LIGAS ÚNICAMENTE
+   ========================================================================= */
+p.referencias {
+    font-size: 1.1em !important; /* Mismo tamaño normal del cuerpo de texto */
+    font-weight: normal !important;
+    font-style: normal !important;
+    margin-bottom: 0.8em !important;
+    text-indent: 0 !important;
+    text-align: justify !important;
+}
+
+p.referencias * {
+    font-size: 1em !important; /* Neutraliza spans gigantes o pequeños */
+    font-weight: normal !important; 
+    font-style: normal !important;
+    text-decoration: none !important;
+}
+
+p.referencias a, p.referencias a *, p.referencias span.hipervinculo {
+    color: #215e9e !important;
+    text-decoration: underline !important;
+}
+
+/* =========================================================================
+   NOTAS AL PIE
+   ========================================================================= */
+p.NOTA-AL-PIE, p.ESTILOS-FINALES_NOTA-AL-PIE, section._idFootnotes p, section._idFootnotes div {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 0.95em !important; /* Ligeramente más pequeñas que el texto plano (1.1em) */
+    line-height: 1.4 !important;
+    text-align: justify !important;
+    text-align-last: left !important;
+    text-indent: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    margin-top: 0.3em !important;
+    margin-bottom: 0.6em !important;
+    color: #000000 !important;
+}
+
+p.NOTA-AL-PIE *, p.ESTILOS-FINALES_NOTA-AL-PIE *, section._idFootnotes p * {
+    font-size: 1em !important; /* Congela el tamaño para que herede el 0.95em */
+    font-family: 'Times New Roman', Times, serif !important;
+}
+
+/* Superíndices (Números de nota) en todo el documento y dentro de notas al pie */
+sup, sub, sup.NOTA, span.NUMERO-NOTA, span._idGenCharOverride-1, sup._idGenCharOverride-1, span._idGenCharOverride-2 {
+    font-size: 0.75em !important; /* Números reducidos para no interrumpir el interlineado */
+    vertical-align: super !important;
+    line-height: 0;
+}
+
+/* =========================================================================
+   CITAS, SECCIONES Y MULTIMEDIA
+   ========================================================================= */
+p.ESTILOS-FINALES_TRP, p.ESTILOS-FINALES_trs, p.ESTILOS-FINALES_trul, p.ESTILOS-FINALES_trun,
+[class*="TRP"], [class*="_trs"], [class*="_trul"], [class*="_trun"] {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 0.95em !important;
+    line-height: 1.5 !important;
+    text-align: justify !important;
+    margin-left: 2em !important;
+    margin-right: 1em !important;
+    padding-left: 0 !important;
+    color: #000000 !important;
+    text-indent: 0 !important;
+}
+
+.grises-vv, .bold-grises-redondas, .bold-grises-italicas, .BOLD-ITALIC {
     font-weight: normal !important; color: #000000 !important; font-family: 'Times New Roman', Times, serif !important;
 }
 
-h3.romanos { font-size: 1.35em !important; margin-top: 1.6em !important; margin-bottom: 0.8em !important; text-align: left !important; }
-h4.arabigos { font-size: 1.25em !important; margin-top: 1.2em !important; margin-bottom: 0.8em !important; text-align: left !important; }
+h3.romanos, h4.arabigos { 
+    text-align: left !important; 
+    text-indent: 0 !important; 
+    margin-left: 0 !important; 
+    padding-left: 0 !important; 
+    color: #000000 !important;
+}
+h3.romanos *, h4.arabigos * {
+    text-align: left !important;
+    text-indent: 0 !important;
+    font-size: 1em !important;
+    color: #000000 !important;
+}
+h3.romanos { font-size: 1.35em !important; margin-top: 1.6em !important; margin-bottom: 0.8em !important; font-weight: bold !important;}
+h4.arabigos { font-size: 1.25em !important; margin-top: 1.2em !important; margin-bottom: 0.8em !important; font-weight: bold !important;}
+
 
 p.notas_iniciales { color: #58595b; font-size: 1.1em !important; line-height: 1.6; margin-top: 0 !important; margin-bottom: 2em; text-align: left !important;}
 p.notas_iniciales a, p.notas_iniciales span.hipervinculo { color: #215e9e; text-decoration: underline; }
@@ -171,13 +301,8 @@ p.como_citar {
 .ORCID svg, ._idSVGInline svg { width: 100%; height: 100%; display: block; }
 a, span.Hiperv-nculo, span.hipervinculo { color: #215e9e !important; text-decoration: underline !important; }
 
-/* Neutralización sumario */
 p.SUMARIO a, p.SUMARIO span.Hiperv-nculo, p.SUMARIO span.hipervinculo, .sumario a {
     color: #000000 !important; text-decoration: none !important; pointer-events: none;
-}
-
-sup, sub, sup.NOTA, span.NUMERO-NOTA, span._idGenCharOverride-1, sup._idGenCharOverride-1, span._idGenCharOverride-2 {
-    font-size: 1.05em !important; vertical-align: super !important; line-height: 0;
 }
 
 hr.HorizontalRule-1 { border: none; border-top: 1px solid #999; margin: 2em 0 1em 0; }
@@ -187,7 +312,31 @@ hr.HorizontalRule-1 { border: none; border-top: 1px solid #999; margin: 2em 0 1e
     font-size: 1.35em; font-weight: bold; border-radius: 0 4px 4px 0; margin: 0; display: inline-block;
 }
 
-img { max-width: 100%; height: auto; margin: 1.4em auto !important; display: block; }
+img { max-width: 100%; height: auto; margin: 1.4em 0 !important; display: block; }
+/* Párrafos contenedores de imagen real del artículo */
+p.imagen-articulo {
+    margin: 1.4em 0 0.3em 0 !important;
+    padding: 0 !important;
+    text-indent: 0 !important;
+    text-align: left !important;
+}
+p.imagen-articulo img {
+    margin: 0 !important;
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+/* Pies de figura / fuentes */
+p.pie-figura {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 0.95em !important;
+    line-height: 1.4 !important;
+    text-align: left !important;
+    text-indent: 0 !important;
+    margin: 0 0 1.2em 0 !important;
+    color: #000000 !important;
+}
+p.pie-figura * { font-size: 1em !important; font-family: inherit !important; }
 .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; display: block; margin: 1.4em 0; }
 table { width: 100% !important; border-collapse: collapse !important; margin: 0 !important; }
 table td, table th { font-family: 'Times New Roman', Times, serif !important; font-size: 1em !important; text-align: justify !important; padding: 0.6em !important; }
