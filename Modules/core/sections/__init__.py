@@ -16,7 +16,7 @@ def obtener_procesador_por_seccion(revista: str, codigo_seccion: str) -> Callabl
         r'\brb\b': "Reseña bibliográfica",
         r'\bnm\b': "Nota metodológica",
         r'\bej\b': "Estudio jurisprudencial",
-        r'\bar\b': "Análisis regional",
+        r'\bar\b': "Análisis de reformas electorales",
         r'\boe\b': "Observatorio electoral",
         r'\bart\b': "Artículo"
     }

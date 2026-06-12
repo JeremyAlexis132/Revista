@@ -91,6 +91,9 @@ def _es_acerca_de_autor(texto: str, clases: str) -> bool:
     clases_lower = clases.lower()
     if "acerca-del-autor" in clases_lower or "estilo-de-p-rrafo-6" in clases_lower:
         return True
+    # Clases del tipo autor2, autor3, autor4... usadas en InDesign para bios de autores adicionales
+    if re.search(r'\bautor\d+\b', clases_lower):
+        return True
     texto_lower = texto.lower()
     if "correo electrónico:" in texto_lower or "email:" in texto_lower:
         return True
@@ -266,6 +269,9 @@ def _parece_bloque_autor(elemento: Tag) -> bool:
     clases = [c.lower() for c in _clases_de_elemento(elemento)]
     if any("adscripcion" in c or "pais" in c or "acerca-del-autor" in c for c in clases):
         return False
+    # autor2, autor3, etc. son párrafos de bio en la zona postcontenido, no encabezados de autor
+    if any(re.search(r'\bautor\d+\b', c) for c in clases):
+        return False
     if any("autor" in c for c in clases):
         return True
     if any(c.startswith("estilo-de-p-rrafo") or c.startswith("paraoverride") for c in clases):
@@ -411,7 +417,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             idx += 1
             continue
 
-        if _parece_bloque_autor(elem):
+        if fase in ("identificadores", "titulo_en", "autores", "autor_detalles", "resumen") and _parece_bloque_autor(elem):
             if autor_actual is not None:
                 contenido.autores.append(autor_actual)
             nombre_autor = _limpiar_nombre_autor(elem)
