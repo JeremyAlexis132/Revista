@@ -145,7 +145,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         es_fecha = False
         if is_date_class and not is_email_or_inst:
             es_fecha = True
-        elif has_date_kw and (has_digits or len(texto_limpio) < 40) and not is_email_or_inst:
+        elif fase == "inicio" and has_date_kw and len(texto_limpio) < 150 and not is_email_or_inst:
             es_fecha = True
 
         if is_date_class and not es_fecha and autor_actual and fase == "inicio":

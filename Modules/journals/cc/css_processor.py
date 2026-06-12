@@ -173,7 +173,7 @@ p.nota-de-autor-final, p.correo, p.adscripcion {
    ========================================================================= */
 p.resumen, p.resumen_ingles, p.palabras-clave, p.keywords, 
 p.BODY-text, p.PP, p.body_text,
-p.SUMARIO, p.referencias, p.NOTA-AL-PIE, section._idFootnotes p, 
+p.SUMARIO, p.referencias, p.bib, p.NOTA-AL-PIE, section._idFootnotes p, 
 .como_citar_section p, p.iijunam, p.APA, ol._listStyleNone {
     font-family: 'Times New Roman', Times, serif !important;
     text-align: justify !important;
