@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Gestor principal del procesador de revistas académicas.
-Procesa automáticamente todas las carpetas detectando a qué revista pertenecen.
+Procesa automáticamente todas las carpetas detectando a qué revista pertenecen (RMDE, CC, BMDC).
 """
 
 import os
@@ -39,6 +39,15 @@ from Modules.journals.cc.utils import (
 )
 from Modules.journals.cc.css_processor import procesar_y_combinar_css as css_cc
 
+# Importaciones de BMDC
+from Modules.journals.bmdc.utils import (
+    extraer_id_de_carpeta as ext_id_bmdc, 
+    extraer_codigo_seccion as ext_sec_bmdc, 
+    construir_clave_bitacora as bitacora_bmdc, 
+    es_carpeta_valida as valida_bmdc
+)
+from Modules.journals.bmdc.css_processor import procesar_y_combinar_css as css_bmdc
+
 
 def resolver_archivos_dir() -> str:
     candidatos = ["Archivos", "archivos"]
@@ -72,7 +81,7 @@ def procesar_carpeta_revista(
 
     css_paths = encontrar_css_en_carpeta(ruta_carpeta)
     
-    # Crear la estructura dinámica en Salida/RMDE o Salida/CC
+    # Crear la estructura dinámica en Salida/RMDE, Salida/CC, o Salida/BMDC
     rutas = crear_estructura_salida(salida_base, nombre_carpeta)
 
     # 1. Obtener CSS unificado
@@ -127,8 +136,14 @@ def main() -> None:
             ext_sec = ext_sec_cc
             const_bit = bitacora_cc
             proc_css = css_cc
+        elif valida_bmdc(nombre):
+            revista = "bmdc"
+            ext_id = ext_id_bmdc
+            ext_sec = ext_sec_bmdc
+            const_bit = bitacora_bmdc
+            proc_css = css_bmdc
         else:
-            print(f"  [Ignorado] '{nombre}': No cumple formato RMDE ni CC.")
+            print(f"  [Ignorado] '{nombre}': No cumple formato RMDE, CC ni BMDC.")
             continue
 
         revista_id = ext_id(nombre)
@@ -153,7 +168,7 @@ def main() -> None:
         codigo_seccion = ext_sec(nombre)
         procesador_html_configurado = obtener_procesador_por_seccion(revista, codigo_seccion)
 
-        # Generar subcarpeta contenedora (Salida/RMDE o Salida/CC)
+        # Generar subcarpeta contenedora
         salida_revista_dir = os.path.join(SALIDA_DIR, revista.upper())
 
         # Ejecutar

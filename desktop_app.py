@@ -1,10 +1,11 @@
 """
-App de escritorio para procesar revistas RMDE sin usar terminal.
+App de escritorio para procesar revistas académicas sin usar terminal.
+Soporta procesamiento dinámico de RMDE, CC y BMDC.
 """
 
 import os
 import sys
-from typing import List
+from typing import List, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QDropEvent, QDragEnterEvent
@@ -18,7 +19,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QAbstractItemView,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -27,67 +27,47 @@ from PySide6.QtWidgets import (
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_DIR)
 
-from Modules.journals.rmde.css_processor import procesar_y_combinar_css
 from Modules.core.sections import obtener_procesador_por_seccion
-from Modules.journals.rmde.utils import (
-    construir_clave_bitacora,
+from Modules.core.utils_base import (
     crear_estructura_salida,
     copiar_imagenes,
     encontrar_css_en_carpeta,
     encontrar_html_en_carpeta,
-    extraer_codigo_seccion,
-    extraer_id_de_carpeta,
     leer_bitacora,
     registrar_en_bitacora,
 )
 
+# Importar utilidades y procesadores CSS por revista
+from Modules.journals.rmde import utils as utils_rmde, css_processor as css_rmde
+from Modules.journals.cc import utils as utils_cc, css_processor as css_cc
+from Modules.journals.bmdc import utils as utils_bmdc, css_processor as css_bmdc
+
+# Mapeo dinámico de revistas soportadas
+JOURNALS = {
+    "rmde": {"utils": utils_rmde, "css_processor": css_rmde.procesar_y_combinar_css},
+    "cc": {"utils": utils_cc, "css_processor": css_cc.procesar_y_combinar_css},
+    "bmdc": {"utils": utils_bmdc, "css_processor": css_bmdc.procesar_y_combinar_css},
+}
+
 # --- ESTILO VISUAL MODERNO (QSS) ---
 MODERN_STYLE = """
-QMainWindow {
-    background-color: #F8F9FA;
-}
-QPushButton {
-    background-color: #0D6EFD;
-    color: white;
-    border-radius: 6px;
-    padding: 8px 16px;
-    font-weight: bold;
-    font-size: 13px;
-    border: none;
-}
-QPushButton:hover {
-    background-color: #0B5ED7;
-}
-QPushButton:pressed {
-    background-color: #0a53be;
-}
-QPushButton#ProcessBtn {
-    background-color: #198754;
-    font-size: 15px;
-    padding: 12px;
-}
-QPushButton#ProcessBtn:hover {
-    background-color: #157347;
-}
-QListWidget, QTextEdit {
-    background-color: #FFFFFF;
-    border: 1px solid #DEE2E6;
-    border-radius: 6px;
-    padding: 8px;
-    font-size: 13px;
-    color: #212529;
-}
-QLabel {
-    font-size: 14px;
-    color: #212529;
-    font-weight: bold;
-}
-QLabel#InfoLabel {
-    font-size: 12px;
-    color: #6C757D;
-    font-weight: normal;
-}
+QMainWindow { background-color: #F8F9FA; }
+QPushButton { background-color: #0D6EFD; color: white; border-radius: 6px; padding: 8px 16px; font-weight: bold; font-size: 13px; border: none; }
+QPushButton:hover { background-color: #0B5ED7; }
+QPushButton:pressed { background-color: #0a53be; }
+QPushButton#ProcessBtn { background-color: #198754; font-size: 15px; padding: 12px; }
+QPushButton#ProcessBtn:hover { background-color: #157347; }
+QListWidget, QTextEdit { background-color: #FFFFFF; border: 1px solid #DEE2E6; border-radius: 6px; padding: 8px; font-size: 13px; color: #212529; }
+QLabel { font-size: 14px; color: #212529; font-weight: bold; }
+QLabel#InfoLabel { font-size: 12px; color: #6C757D; font-weight: normal; }
 """
+
+def identificar_revista(folder_name: str) -> Optional[str]:
+    """Identifica a qué revista pertenece la carpeta basado en su nombre."""
+    for revista, modulos in JOURNALS.items():
+        if modulos["utils"].es_carpeta_valida(folder_name):
+            return revista
+    return None
 
 class DropListWidget(QListWidget):
     def __init__(self, add_callback, parent=None):
@@ -118,7 +98,7 @@ class DropListWidget(QListWidget):
 class RevistaApp(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Formato Revistas")
+        self.setWindowTitle("Formato Revistas Automático")
         self.resize(950, 650)
         
         icono_path = os.path.join(PROJECT_DIR, "icono.png")
@@ -153,7 +133,7 @@ class RevistaApp(QMainWindow):
         left_layout = QVBoxLayout()
         left_layout.addWidget(QLabel("Carpetas a procesar:"))
         
-        info_drag = QLabel("💡 Tip: Puedes seleccionar varias carpetas en tu explorador y arrastrarlas directamente aquí.")
+        info_drag = QLabel("💡 Tip: Puedes arrastrar carpetas directamente aquí.")
         info_drag.setObjectName("InfoLabel")
         left_layout.addWidget(info_drag)
         
@@ -221,12 +201,19 @@ class RevistaApp(QMainWindow):
 
     def validate_folder(self, folder_name: str, folder_path: str) -> List[str]:
         errores = []
-        revista_id = extraer_id_de_carpeta(folder_name)
+        revista = identificar_revista(folder_name)
+        if not revista:
+            errores.append(f"La carpeta '{folder_name}' no corresponde a una revista soportada (RMDE, CC, BMDC).")
+            return errores
+            
+        revista_id = JOURNALS[revista]["utils"].extraer_id_de_carpeta(folder_name)
         if revista_id is None:
-            errores.append("No se pudo extraer ID del nombre de la carpeta.")
+            errores.append("No se pudo extraer el ID numérico del nombre de la carpeta.")
+            
         html_path = encontrar_html_en_carpeta(folder_path)
         if html_path is None:
-            errores.append("No se encontró archivo HTML en la carpeta.")
+            errores.append("No se encontró ningún archivo HTML en la carpeta.")
+            
         return errores
 
     def process_all(self) -> None:
@@ -256,29 +243,33 @@ class RevistaApp(QMainWindow):
                 for err in errores_validacion:
                     self.log(f"❌ Error: {err}")
                 continue
-
-            clave_bitacora = construir_clave_bitacora(folder_name)
-            revista_id = extraer_id_de_carpeta(folder_name)
+                
+            revista = identificar_revista(folder_name)
+            utils = JOURNALS[revista]["utils"]
+            
+            clave_bitacora = utils.construir_clave_bitacora(folder_name)
+            revista_id = utils.extraer_id_de_carpeta(folder_name)
+            
             if clave_bitacora is None or revista_id is None:
                 errores += 1
                 self.log("❌ Error: No se pudo construir clave de bitácora.")
                 continue
 
+            # Revisión de duplicados
             procesada_en_bitacora_nueva = clave_bitacora in self.ids_procesados
-            procesada_en_bitacora_legacy = (
-                revista_id in self.ids_procesados and clave_bitacora.endswith(":art")
-            )
+            procesada_en_bitacora_legacy = (revista_id in self.ids_procesados and clave_bitacora.endswith(":art"))
+            
             if procesada_en_bitacora_nueva or procesada_en_bitacora_legacy:
                 omitidas += 1
                 self.log("⚠️ Omitida: Ya fue procesada anteriormente según la bitácora.")
                 continue
 
-            exito = self.process_folder(folder_name, folder_path)
+            exito = self.process_folder(folder_name, folder_path, revista)
             if exito:
                 registrar_en_bitacora(self.bitacora_path, clave_bitacora)
                 self.ids_procesados.append(clave_bitacora)
                 procesadas += 1
-                self.log("✅ Éxito: Carpeta procesada correctamente.")
+                self.log(f"✅ Éxito: Carpeta procesada correctamente como {revista.upper()}.")
             else:
                 errores += 1
                 self.log("❌ Error: Falló el procesamiento del HTML/CSS.")
@@ -290,19 +281,24 @@ class RevistaApp(QMainWindow):
         
         QMessageBox.information(self, "Proceso Terminado", f"Se procesaron {procesadas} carpetas.\nHubo {errores} errores.")
 
-    def process_folder(self, folder_name: str, folder_path: str) -> bool:
+    def process_folder(self, folder_name: str, folder_path: str, revista: str) -> bool:
+        utils = JOURNALS[revista]["utils"]
+        procesar_css = JOURNALS[revista]["css_processor"]
+        
         html_path = encontrar_html_en_carpeta(folder_path)
-        if html_path is None:
-            return False
-
         css_paths = encontrar_css_en_carpeta(folder_path)
-        rutas = crear_estructura_salida(self.output_dir, folder_name)
+        
+        # Guardar cada revista en su respectiva subcarpeta para mantener orden
+        ruta_salida_base = os.path.join(self.output_dir, revista.upper())
+        rutas = crear_estructura_salida(ruta_salida_base, folder_name)
 
-        css_inline = procesar_y_combinar_css(css_paths)
+        css_inline = procesar_css(css_paths)
         copiar_imagenes(folder_path, rutas["images"])
 
-        codigo_seccion = extraer_codigo_seccion(folder_name)
-        procesador_html = obtener_procesador_por_seccion(codigo_seccion)
+        codigo_seccion = utils.extraer_codigo_seccion(folder_name)
+        
+        # Aquí se pasaba mal el argumento, ahora pasamos correctamente la revista y el codigo
+        procesador_html = obtener_procesador_por_seccion(revista, codigo_seccion)
 
         return procesador_html(
             html_path=html_path,
