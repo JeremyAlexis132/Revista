@@ -12,6 +12,7 @@ _FONT_SIZE_MAP: Dict[str, str] = {
     "5px": "0.55em",
     "9px": "0.9em",
     "10px": "1.1em",
+    "11px": "1.0em",
     "12px": "1.3em",
 }
 
@@ -407,11 +408,54 @@ span.cursivas {
     font-weight: normal;
 }
 
+/* Tamaños correctos para citas y subcabeceras internas */
+p.TRUN {
+    font-size: 1em !important;
+    line-height: 1.45 !important;
+    margin-top: 1.2em !important;
+    margin-bottom: 1.2em !important;
+    margin-left: 2.0em !important;
+    text-align: justify !important;
+    text-indent: 0 !important;
+}
+
+p.IS {
+    font-size: 1em !important;
+    line-height: 1.45 !important;
+    margin-top: 1.2em !important;
+    margin-bottom: 1.2em !important;
+    margin-left: 2.0em !important;
+    text-align: left !important;
+    text-indent: -1.2em !important;
+}
+
 .como_citar_section, .como_citar_section p, .como_citar_section div, p.APA, p.iijunam, p.rmde {
     text-align: left !important;
     text-indent: 0 !important;
     margin-left: 0 !important;
 }
+
+/* Normalizar tamaño, color y espaciado de cualquier párrafo dentro de como_citar,
+   independientemente de la clase original (pp, acerca-del-autor, body_text, etc.) */
+.como_citar_section p {
+    font-size: 1em !important;
+    color: #000000 !important;
+    line-height: 1.5 !important;
+    margin-top: 0.2em !important;
+    margin-bottom: 0.2em !important;
+}
+
+/* Etiquetas iijunam/apa/rmde como encabezados de sección (mayor especificidad, van después) */
+.como_citar_section p.iijunam,
+.como_citar_section p.APA {
+    font-variant: small-caps;
+    font-weight: bold;
+    font-size: 0.95em !important;
+    margin-top: 0.8em !important;
+    margin-bottom: 0.1em !important;
+    color: #000000;
+}
+
 
 @media (max-width: 768px) {
     .contenedor {

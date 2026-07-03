@@ -85,7 +85,7 @@ def _generar_identificadores_cc(contenido: ContenidoArticulo, nombre_revista: st
     if not '<a' in doi_html and contenido.doi_extraido:
          doi_html = f'<a href="{contenido.doi_extraido}"><span class="hipervinculo">{contenido.doi_extraido}</span></a>'
 
-    line1 = f"Cuestiones Constitucionales, Revista Mexicana de Derecho Constitucional, {vol_num}, {meses_ano}, {e_id}"
+    line1 = f"Cuestiones Constitucionales. Revista Mexicana de Derecho Constitucional, {vol_num}, {meses_ano}, {e_id}"
     line2 = f'e-ISSN: 2448-4881  DOI: {doi_html}'
     line3 = 'Esta obra está bajo una <a href="https://creativecommons.org/licenses/by/4.0/"><span class="hipervinculo">Licencia Creative Commons Reconocimiento 4.0 Internacional</span></a>'
     line4 = 'Instituto de Investigaciones Jurídicas de la Universidad Nacional Autónoma de México'

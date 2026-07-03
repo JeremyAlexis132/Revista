@@ -97,6 +97,10 @@ def _es_acerca_de_autor(texto: str, clases: str) -> bool:
     texto_lower = texto.lower()
     if "correo electrónico:" in texto_lower or "email:" in texto_lower:
         return True
+    # fechas-y-nota-curricular-final puede contener bios de autor (cuando no empieza con fecha)
+    if "fechas-y-nota-curricular-final" in clases_lower:
+        if not any(texto_lower.startswith(x) for x in ["recibido", "aceptado", "publicado", "recepción", "aceptación", "aprobación", "publicación"]):
+            return True
     return False
 
 def _es_fecha(texto: str, clases: str) -> bool:
@@ -106,6 +110,10 @@ def _es_fecha(texto: str, clases: str) -> bool:
         return True
     if any(t_lower.startswith(x) for x in ["recepción:", "recibido:", "aceptación:", "aceptado:", "aprobación:", "aprobado:", "publicación:", "publicado:"]):
         return True
+    # La clase fechas-y-nota-curricular-final puede contener fechas (cuando el texto empieza con prefijo de fecha)
+    if "fechas-y-nota-curricular-final" in c_lower:
+        if any(t_lower.startswith(x) for x in ["recibido", "aceptado", "publicado", "recepción", "aceptación", "aprobación", "publicación"]):
+            return True
     return False
 
 def _extraer_url_doi(texto: str) -> str:
@@ -187,17 +195,22 @@ def _generar_identificadores_faltantes(contenido: ContenidoArticulo, nombre_revi
                 e_id = match_vol.group(4).strip()
             
             matches_doi = re.findall(r'(https?://(?:dx\.)?doi\.org/[^\s]+)', texto_plano, re.IGNORECASE)
+            doi_encontrado = False
             for doi_match in matches_doi:
                 doi_url = doi_match.rstrip(".,;")
-                if doi_url.endswith(revista_id):
+                if doi_url.endswith(revista_id) or doi_url.endswith(f".{revista_id}"):
                     doi_html = f'<a href="{doi_url}"><span class="hipervinculo">{doi_url}</span></a>'
+                    doi_encontrado = True
                     break
+            if not doi_encontrado and matches_doi:
+                doi_url = matches_doi[0].rstrip(".,;")
+                doi_html = f'<a href="{doi_url}"><span class="hipervinculo">{doi_url}</span></a>'
             break
 
     line1 = f"Revista Mexicana de Derecho Electoral, {vol_num}, {meses_ano}, {e_id}"
     line2 = f'e-ISSN: 2448-7910  DOI: {doi_html}'
     line3 = 'Esta obra está bajo una <a href="https://creativecommons.org/licenses/by/4.0/"><span class="hipervinculo">Licencia Creative Commons Reconocimiento 4.0 Internacional</span></a>'
-    line4 = '<span class="hipervinculo">Instituto de Investigaciones Jurídicas de la Universidad Nacional Autónoma de México</span>'
+    line4 = 'Instituto de Investigaciones Jurídicas de la Universidad Nacional Autónoma de México'
 
     return [line1, line2, line3, line4]
 
@@ -263,15 +276,18 @@ def _tiene_orcid_en_bloque(elemento: Tag) -> bool:
         return True
     return bool(re.search(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b", elemento.get_text(" ", strip=True)))
 
-def _parece_bloque_autor(elemento: Tag) -> bool:
+def _parece_bloque_autor(elemento: Tag, en_cabecera: bool = False) -> bool:
     if elemento.name != "p":
         return False
     clases = [c.lower() for c in _clases_de_elemento(elemento)]
     if any("adscripcion" in c or "pais" in c or "acerca-del-autor" in c for c in clases):
         return False
-    # autor2, autor3, etc. son párrafos de bio en la zona postcontenido, no encabezados de autor
+    # autor2, autor3, etc.: en postcontenido son bios de autor; en cabecera son nombres de autor adicional.
+    # Si estamos en la zona de cabecera (antes del resumen), los tratamos como encabezado de autor.
     if any(re.search(r'\bautor\d+\b', c) for c in clases):
-        return False
+        if en_cabecera:
+            return True   # segundo/tercer autor en cabecera de InDesign
+        return False      # en postcontenido son bios, no encabezados
     if any("autor" in c for c in clases):
         return True
     if any(c.startswith("estilo-de-p-rrafo") or c.startswith("paraoverride") for c in clases):
@@ -293,7 +309,7 @@ def _extraer_autores_desde_elementos(elementos: List[Tag]) -> List[Autor]:
         clases = " ".join(_clases_de_elemento(elem)).lower()
         if "resumenfinal" in clases:
             break
-        if not _parece_bloque_autor(elem):
+        if not _parece_bloque_autor(elem, en_cabecera=True):
             idx += 1
             continue
         nombre = _limpiar_nombre_autor(elem)
@@ -305,7 +321,7 @@ def _extraer_autores_desde_elementos(elementos: List[Tag]) -> List[Autor]:
             clases_sib = " ".join(_clases_de_elemento(sib)).lower()
             if "resumenfinal" in clases_sib:
                 break
-            if _parece_bloque_autor(sib):
+            if _parece_bloque_autor(sib, en_cabecera=True):
                 idx -= 1
                 break
             if "adscripcion" in clases_sib:
@@ -417,7 +433,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             idx += 1
             continue
 
-        if fase in ("identificadores", "titulo_en", "autores", "autor_detalles", "resumen") and _parece_bloque_autor(elem):
+        if fase in ("identificadores", "titulo_en", "autores", "autor_detalles", "resumen") and _parece_bloque_autor(elem, en_cabecera=True):
             if autor_actual is not None:
                 contenido.autores.append(autor_actual)
             nombre_autor = _limpiar_nombre_autor(elem)

@@ -173,7 +173,7 @@ p.nota-de-autor-final, p.correo, p.adscripcion {
    ========================================================================= */
 p.resumen, p.resumen_ingles, p.palabras-clave, p.keywords, 
 p.BODY-text, p.PP, p.body_text,
-p.SUMARIO, p.referencias, p.bib, p.NOTA-AL-PIE, section._idFootnotes p, 
+p.SUMARIO, p.referencias, p.bib,
 .como_citar_section p, p.iijunam, p.APA, ol._listStyleNone {
     font-family: 'Times New Roman', Times, serif !important;
     text-align: justify !important;
@@ -197,11 +197,36 @@ p.recepcion, p.aceptacion-publicacion {
     text-indent: 0 !important;
 }
 
-p.trun {
+/* Párrafos intermedios y final de un bloque de cita: sin separación entre sí */
+p.trs, p.trul, p.TRI, p.TRPU {
+    margin-top: 0 !important;
+}
+
+/* Listas (letrap / letras / letraul): mismo tamaño que cuerpo de texto, numeración decimal */
+ol:has(li.letrap, li.letras, li.letraul) {
+    list-style-type: decimal !important;
+    padding-left: 2em !important;
+    margin-top: 1em !important;
+    margin-bottom: 1em !important;
+}
+
+li.letrap, li.letras, li.letraul {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 1.1em !important;
+    line-height: 1.6 !important;
+    text-align: justify !important;
+    list-style-type: decimal !important;
+    margin-top: 0.3em !important;
+    margin-bottom: 0.3em !important;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+}
+
+p.trun, p.TRP, p.TRI, p.TRPU, p.TRUNIC, p.trs, p.trul {
     font-family: 'Times New Roman', Times, serif !important;
     margin-left: 2.5em !important;
     margin-right: 2.5em !important;
-    font-size: 1.1em !important;
+    font-size: 0.95em !important;
     text-align: justify !important;
     line-height: 1.5 !important;
     margin-top: 1.2em !important;
@@ -300,6 +325,18 @@ table td, table th {
     table {
         min-width: 600px !important;
     }
+}
+
+/* Notas al pie: más pequeñas que las citas */
+p.NOTA-AL-PIE, section._idFootnotes p {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 0.82em !important;
+    line-height: 1.45 !important;
+    text-align: justify !important;
+    text-align-last: left !important;
+    text-indent: 0 !important;
+    margin-top: 0.2em !important;
+    margin-bottom: 0.2em !important;
 }
 
 section._idFootnotes {
