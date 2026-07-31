@@ -1,9 +1,3 @@
-"""
-Módulo para extraer y reestructurar HTML específico de BMDC.
-Genera la estructura semántica correcta asignando las clases que permitirán 
-al CSS manipular los tamaños y aplicar el espaciado correcto entre autores.
-"""
-
 import re
 import urllib.parse
 import unicodedata
@@ -24,10 +18,8 @@ class ContenidoArticulo:
     titulo_es: str = ""
     titulo_en: str = ""
     autores_obj: List[Autor] = field(default_factory=list)
-    resumen: str = ""
-    palabras_clave: str = ""
-    abstract: str = ""
-    keywords: str = ""
+    resumenes: List[str] = field(default_factory=list)
+    palabras_claves: List[str] = field(default_factory=list)
     secciones_cuerpo: List[str] = field(default_factory=list)
     referencias: List[str] = field(default_factory=list)
     fechas: List[str] = field(default_factory=list)
@@ -85,15 +77,10 @@ def _generar_identificadores_bmdc(contenido: ContenidoArticulo, nombre_revista: 
         if "Boletín Mexicano de Derecho Comparado" in texto_plano or "BMDC" in texto_plano:
             vol_match = re.search(r'vol\.?\s*(\d+)', texto_plano, re.IGNORECASE)
             num_match = re.search(r'(?:n[úu]m(?:ero)?\.?|no\.)\s*(\d+)', texto_plano, re.IGNORECASE)
-            # Cubrir rangos de meses en español e inglés:
-            #   "enero-abril de 2026", "January-April, 2026", "enero-abril 2026"
-            # Exigimos ≥3 letras para no capturar prefijos de e-IDs (ej. "e2052")
-            # La coma opcional cubre el formato inglés "Month-Month, YYYY"
             mes_match = re.search(
                 r'([a-záéíóúüñA-Z]{3,}(?:\s*[-–]\s*[a-záéíóúüñA-Z]{3,})?\s*,?\s*(?:de\s*)?\d{4})',
                 texto_plano, re.IGNORECASE
             )
-            # e_id: buscar "eNNNNN" fuera de URLs (eliminar URLs antes del match)
             texto_sin_urls = re.sub(r'https?://\S+', '', texto_plano)
             eid_match = re.search(r'\b(e\d{5,6})\b', texto_sin_urls, re.IGNORECASE)
 
@@ -112,7 +99,7 @@ def _generar_identificadores_bmdc(contenido: ContenidoArticulo, nombre_revista: 
 
     line1 = f"Boletín Mexicano de Derecho Comparado, {vol_num}, {meses_ano}, {e_id}"
     line2 = f'e-ISSN: 2448-4873  DOI: {doi_html}'
-    line3 = 'Esta obra está bajo una <a href="https://creativecommons.org/licenses/by/4.0/"><span class="hipervinculo">Licencia Creative Commons Reconocimiento 4.0 Internacional</span></a>'
+    line3 = 'Esta obra está bajo una <a href="https://creativecommons.org/licenses/by-nc/4.0/"><span class="hipervinculo">Licencia Creative Commons Reconocimiento 4.0 Internacional</span></a>'
     line4 = 'Instituto de Investigaciones Jurídicas de la Universidad Nacional Autónoma de México'
 
     return [line1, line2, line3, line4]
@@ -123,7 +110,6 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         
     for br in soup.find_all("br"): br.replace_with(" ")
     
-    # Destrucción agresiva de estilos de InDesign incrustados en etiquetas
     for tag in soup.find_all(True):
         if tag.has_attr('style'):
             cleaned_style = re.sub(r'(font-size|text-indent|text-align|margin[-a-z]*|font-family|line-height)\s*:[^;]+;?', '', tag['style'], flags=re.IGNORECASE)
@@ -144,21 +130,15 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
 
     for span in soup.find_all("span", class_="no-separar"): span.unwrap()
     
-    # Destrucción selectiva: solo logos de InDesign y el ícono ORCID.
-    # Las imágenes reales del artículo (mapas, figuras, gráficas) se preservan.
-    # El ícono ORCID se elimina SOLO como <img>; el <a href> y el texto URL del span padre
-    # permanecen intactos para que el loop principal pueda extraer la URL del ORCID.
     for img in soup.find_all("img"):
         src_lower = img.get("src", "").lower()
         if "logo_findearticulo" in src_lower or "logo_cc_fin" in src_lower:
-            # Destruir el párrafo completo que contiene el logo basura
             parent_p = img.find_parent("p")
             if parent_p:
                 parent_p.decompose()
             else:
                 img.decompose()
         elif "orcid" in src_lower:
-            # Solo eliminar el <img> del ícono ORCID; preservar el <a href> y el texto URL
             img.decompose()
             
     contenido = ContenidoArticulo()
@@ -183,19 +163,14 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             continue
 
         is_date_class = "recepcion" in clases_limpias or "aceptacion" in clases_limpias or "aceptacion-publicacion" in clases
-        # CRÍTICO: solo detectar keyword de fecha si aparece al INICIO del texto (primeros 35 chars).
-        # Esto evita que párrafos del cuerpo que mencionan "publicación" o "aprobación" en medio
-        # del texto sean clasificados erróneamente como fechas.
         texto_inicio = texto_lower[:35]
         has_date_kw = bool(re.search(r'^(recepci[óo]n|recibido|aceptaci[óo]n|aceptado|publicaci[óo]n|publicado|aprobaci[óo]n|aprobado)\s*:', texto_inicio))
         has_digits = bool(re.search(r'\d', texto_lower))
         is_email_or_inst = "@" in texto_lower or "universidad" in texto_lower or "instituto" in texto_lower or "facultad" in texto_lower
 
-        # Una vez en el cuerpo del artículo, NUNCA reclasificar como fecha
         es_fecha = False
         if fase != "cuerpo":
             es_fecha = is_date_class and not is_email_or_inst
-            # Para keyword-based detection: el texto debe ser corto (< 80 chars) Y empezar con la keyword
             if not es_fecha and has_date_kw and len(texto_limpio) < 80 and not is_email_or_inst:
                 es_fecha = True
 
@@ -212,9 +187,6 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             capturando_fecha_fragmentada = not has_digits
             continue
         elif capturando_fecha_fragmentada and has_digits and len(texto_limpio) < 50:
-            # Solo absorber si el elemento NO tiene una clase de cuerpo reconocida.
-            # Esto evita que párrafos de introducción cortos con números (ej. "2024")
-            # o notas de imagen (ej. "Fuente: INEGI (2023)") sean absorbidos como fechas.
             clases_cuerpo = {"pp", "body", "text", "trp", "trs", "trul", "trun",
                             "balap", "balas", "balaul", "fuente", "nota", "pie"}
             tiene_clase_cuerpo = any(c in clases_limpias for c in clases_cuerpo)
@@ -242,11 +214,6 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 contenido.titulo_en = str(elem)
             continue
 
-        # Detección de "párrafo de estilo genérico de InDesign" que corresponde al primer autor.
-        # InDesign a veces exporta el primer autor con clase "Estilo-de-p-rrafo-N" en lugar de AUT.
-        # Se detecta si: (a) aún estamos en fase "inicio", (b) no hay autor_actual todavía,
-        # (c) la clase contiene "estilo-de-p" o "estilo de p" (variante de InDesign), y
-        # (d) el texto NO parece un título, fecha, institución ni resumen.
         es_parrafo_estilo_indesign = (
             fase == "inicio"
             and autor_actual is None
@@ -278,18 +245,14 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             
         if "orcid" in clases_limpias:
             if autor_actual:
-                # 1) Buscar <a href> explícito (algunos artículos lo tienen)
                 enlace = elem.find("a", href=True)
                 if enlace and "orcid.org" in enlace.get("href", "").lower():
                     autor_actual.orcid_url = enlace["href"].strip()
                 else:
-                    # 2) Fallback: extraer URL de texto plano del span/párrafo
-                    #    (caso BMDC: <span class="hipervinculo"><img/> https://orcid.org/...</span>)
                     match = re.search(r"(https?://orcid\.org/[\d\-X]+)", texto_limpio)
                     if match:
                         autor_actual.orcid_url = match.group(1).strip()
                     elif enlace:
-                        # 3) Cualquier <a href> como último recurso
                         autor_actual.orcid_url = enlace["href"].strip()
             continue
 
@@ -298,21 +261,42 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 autor_actual.adscripciones_html.append(_obtener_html_interno(elem))
                 continue
 
-        # Clasificación segura para resúmenes
-        if ("resumen" in clases and "resumen_ingles" not in clases) or texto_lower.startswith("resumen:"):
-            elem['class'] = ['resumen']; contenido.resumen = str(elem); fase = "cuerpo"; continue
-        if "palabras-clave" in clases or texto_lower.startswith("palabras clave:"):
-            elem['class'] = ['palabras-clave']; contenido.palabras_clave = str(elem); fase = "cuerpo"; continue
-        if "resumen_ingles" in clases or texto_lower.startswith("abstract:"):
-            elem['class'] = ['resumen_ingles']; contenido.abstract = str(elem); fase = "cuerpo"; continue
-        if "keywords" in clases or "keyword" in clases_limpias or texto_lower.startswith("keywords:"):
-            elem['class'] = ['keywords']; contenido.keywords = str(elem); fase = "cuerpo"; continue
+        _PREFIJOS_RESUMEN = (
+            "resumen:", "résumé:", "resume:", "resumo:", "riassunto:", "sommario:", "abstract:",
+        )
+        _PREFIJOS_PALABRAS_CLAVE = (
+            "palabras clave:", "mots-clés:", "mots clés:", "mots cles:",
+            "palavras-chave:", "palavras chave:", "parole chiave:", "keywords:",
+        )
 
-        # Priorizar "cómo citar" para evitar que sea tratado como referencia
+        es_bloque_resumen = (
+            "resumen" in clases or "resumen_ingles" in clases or "abstract" in clases_limpias
+            or any(texto_lower.startswith(p) for p in _PREFIJOS_RESUMEN)
+        )
+        if es_bloque_resumen:
+            if not contenido.resumenes:
+                elem['class'] = ['resumen']
+            else:
+                elem['class'] = ['resumen_ingles']
+            contenido.resumenes.append(str(elem))
+            fase = "cuerpo"; continue
+
+        es_bloque_palabras_clave = (
+            "palabras-clave" in clases or "keywords" in clases or "keyword" in clases_limpias
+            or any(texto_lower.startswith(p) for p in _PREFIJOS_PALABRAS_CLAVE)
+        )
+        if es_bloque_palabras_clave:
+            if not contenido.palabras_claves:
+                elem['class'] = ['palabras-clave']
+            else:
+                elem['class'] = ['keywords']
+            contenido.palabras_claves.append(str(elem))
+            fase = "cuerpo"; continue
+
         is_como_citar = "como_citar" in clases or "iijunam" in clases_limpias or "apa" in clases_limpias or texto_lower == "cómo citar"
         if is_como_citar:
             elem['class'] = ['como_citar']
-            _activar_enlaces_html(elem) # Transformamos el texto en un enlace real
+            _activar_enlaces_html(elem)
             contenido.como_citar.append(str(elem))
             fase = "como_citar"
             continue
@@ -321,11 +305,10 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             if elem.name == "hr": 
                 fase = "cuerpo" 
             else: 
-                _activar_enlaces_html(elem) # Transformamos el texto en un enlace real
-                contenido.como_citar.append(str(elem)) # Usamos str(elem) en vez de str_elem para capturar el cambio
+                _activar_enlaces_html(elem)
+                contenido.como_citar.append(str(elem))
             continue
 
-        # Procesamiento estricto y encapsulado de Referencias
         is_referencia_heading = False
         if re.search(r'\b(referencias|bibliografía|bibliografia)\b', texto_lower) and len(texto_limpio) < 80:
             is_referencia_heading = True
@@ -338,7 +321,6 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 es_referencia = True
 
         if es_referencia:
-            # Si es el título de la sección de referencias
             if is_referencia_heading:
                 elem.name = "h3"
                 elem['class'] = ['romanos']
@@ -349,18 +331,15 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 fase = "referencias"
                 continue
 
-            # Si es la referencia propiamente
             elem.name = "p"
             elem['class'] = ['referencias']
             
-            # Destrucción TOTAL de modificadores visuales (texto plano exigido)
             for tag in elem.find_all(['strong', 'b', 'em', 'i']): 
                 tag.unwrap()
             
             if elem.has_attr('style'): del elem['style']
             for child in elem.find_all(True):
                 if child.has_attr('style'): del child['style']
-                # Eliminamos clases residuales salvo aquellas que formen una liga explícita
                 if child.has_attr('class'):
                     c_str = " ".join(child['class']).lower()
                     if not any(x in c_str for x in ['hipervinculo', 'link']):
@@ -370,8 +349,6 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             fase = "referencias"
             continue
 
-        # Cuerpo del documento (Todo lo demás)
-        # Incluir párrafos que solo contienen una imagen (texto_limpio vacío pero tienen <img>)
         tiene_imagen_real = bool(elem.find("img"))
         if texto_limpio or elem.name in ["table", "img", "hr"] or tiene_imagen_real:
             if elem.name == "table":
@@ -379,7 +356,6 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             else:
                 is_heading = False
 
-                # Coincidencia EXACTA con clases de encabezado para evitar falsos positivos
                 if any(x in clases_limpias for x in ["romano", "arabigo", "seccion", "vv", "romanos", "arabigos"]):
                     is_heading = True
                 elif len(texto_limpio) < 150 and elem.name in ["p", "h1", "h2", "h3", "h4"]:
@@ -406,30 +382,24 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                         if child.has_attr('style'): del child['style']
 
                 else:
-                    # Normalizar clases residuales de InDesign en párrafos de cuerpo:
-                    # PP (primer párrafo de sección) y BODY-text reciben clase unificada.
-                    # Los párrafos que sólo contienen imagen reciben clase dedicada para
-                    # alineación izquierda; los pies de figura (Fuente:...) igual.
                     clases_originales = " ".join(elem.get("class", [])).lower()
                     if tiene_imagen_real and not texto_limpio:
-                        # Párrafo contenedor de imagen real: clase dedicada, sin texto
                         elem.name = "p"
                         elem['class'] = ['imagen-articulo']
                     elif tiene_imagen_real:
-                        # Párrafo con imagen Y texto (poco común pero posible)
                         elem.name = "p"
                         elem['class'] = ['imagen-articulo']
                     elif "pp" in clases_limpias or "paraoverride" in clases_originales:
-                        # Primer párrafo de sección (PP / ParaOverride): misma clase que BODY-text
-                        # para heredar tipografía unificada
                         if not any(x in clases_originales for x in ["fuente", "pie", "caption", "mapa", "figura", "tabla"]):
                             elem.name = "p"
                             elem['class'] = ['BODY-text']
                         else:
                             elem.name = "p"
                             elem['class'] = ['pie-figura']
+                    elif any(x in clases_limpias for x in ["trp", "trs", "trul", "trun"]):
+                        elem.name = "p"
+                        elem['class'] = ['cita-bloque']
                     elif any(x in clases_limpias for x in ["body", "text", "estilos"]):
-                        # Párrafos de cuerpo con clases compuestas de InDesign: normalizar
                         elem.name = "p"
                         elem['class'] = ['BODY-text']
 
@@ -471,6 +441,17 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
             
     autores_html = _indentar_html(autores_html_list, 4)
 
+    # NUEVO: Intercalar dinámicamente resúmenes y palabras clave
+    bloques_frontales = []
+    max_bloques = max(len(contenido.resumenes), len(contenido.palabras_claves))
+    for i in range(max_bloques):
+        if i < len(contenido.resumenes):
+            bloques_frontales.append(contenido.resumenes[i])
+        if i < len(contenido.palabras_claves):
+            bloques_frontales.append(contenido.palabras_claves[i])
+    
+    html_frontales = "\n\t\t\t\t".join(bloques_frontales) if bloques_frontales else ""
+
     bloques_post = []
     if contenido.fechas or contenido.como_citar or contenido.notas_html: bloques_post.append('<hr class="HorizontalRule-1" />')
     if contenido.fechas:
@@ -506,10 +487,7 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
 \t\t\t\t{contenido.titulo_es}
 \t\t\t\t{contenido.titulo_en}
 \t\t\t\t{autores_html}
-\t\t\t\t{contenido.resumen}
-\t\t\t\t{contenido.palabras_clave}
-\t\t\t\t{contenido.abstract}
-\t\t\t\t{contenido.keywords}
+\t\t\t\t{html_frontales}
 \t\t\t\t{cuerpo_html}
 \t\t\t\t{referencias_html}
 \t\t\t\t{post_html}

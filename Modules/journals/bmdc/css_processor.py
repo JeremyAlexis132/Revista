@@ -159,7 +159,7 @@ p.AUT-DOS-NOMBRES *, p.nota-de-autor-final * {
 p.resumen, p.resumen_ingles, p.palabras-clave, p.keywords, p.abstract,
 p.BODY-text, p.PP, p.body_text, p.ESTILOS-FINALES_BODY-text,
 p.SUMARIO, p.referencias, 
-.como_citar_section p, p.iijunam, p.APA, ol._listStyleNone {
+.como_citar_section p, p.iijunam, p.APA {
     font-family: 'Times New Roman', Times, serif !important;
     text-align: justify !important;
     text-align-last: left !important;
@@ -169,6 +169,20 @@ p.SUMARIO, p.referencias,
     text-indent: 0 !important;   
     margin-left: 0 !important;   
     margin-right: 0 !important;
+    padding-left: 0 !important;
+}
+
+/* Enumeraciones normales del cuerpo (no son citas ni notas al pie):
+   deben verse del mismo tamaño que el texto plano, no más chicas.
+   Las listas dentro de section._idFootnotes se sobreescriben más abajo
+   con un selector más específico que sí las hace chicas (0.9em). */
+ol._listStyleNone {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 1.1em !important;
+    line-height: 1.6 !important;
+    text-align: justify !important;
+    text-align-last: left !important;
+    margin-left: 1.4em !important;
     padding-left: 0 !important;
 }
 
@@ -221,8 +235,8 @@ p.referencias a, p.referencias a *, p.referencias span.hipervinculo {
    ========================================================================= */
 p.NOTA-AL-PIE, p.ESTILOS-FINALES_NOTA-AL-PIE, section._idFootnotes p, section._idFootnotes div {
     font-family: 'Times New Roman', Times, serif !important;
-    font-size: 0.95em !important; /* Ligeramente más pequeñas que el texto plano (1.1em) */
-    line-height: 1.4 !important;
+    font-size: 1em !important; /* Sección final del boletín (notas/hipervínculos): tamaño aumentado */
+    line-height: 1.35 !important;
     text-align: justify !important;
     text-align-last: left !important;
     text-indent: 0 !important;
@@ -249,10 +263,11 @@ sup, sub, sup.NOTA, span.NUMERO-NOTA, span._idGenCharOverride-1, sup._idGenCharO
 /* =========================================================================
    CITAS, SECCIONES Y MULTIMEDIA
    ========================================================================= */
+p.cita-bloque,
 p.ESTILOS-FINALES_TRP, p.ESTILOS-FINALES_trs, p.ESTILOS-FINALES_trul, p.ESTILOS-FINALES_trun,
 [class*="TRP"], [class*="_trs"], [class*="_trul"], [class*="_trun"] {
     font-family: 'Times New Roman', Times, serif !important;
-    font-size: 0.95em !important;
+    font-size: 0.95em !important; /* Ligeramente más chica que el cuerpo (1.1em), no igual */
     line-height: 1.5 !important;
     text-align: justify !important;
     margin-left: 2em !important;
@@ -341,7 +356,21 @@ p.pie-figura * { font-size: 1em !important; font-family: inherit !important; }
 table { width: 100% !important; border-collapse: collapse !important; margin: 0 !important; }
 table td, table th { font-family: 'Times New Roman', Times, serif !important; font-size: 1em !important; text-align: justify !important; padding: 0.6em !important; }
 @media (max-width: 768px) { table { min-width: 600px !important; } }
-section._idFootnotes { margin-top: 2em; border-top: 1px solid #ccc; padding-top: 1em; text-align: justify !important; margin-left: 0 !important; padding-left: 0 !important; }
+section._idFootnotes {
+    margin-top: 2em;
+    border-top: 1px solid #ccc;
+    padding-top: 1em;
+    text-align: justify !important;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+}
+
+section._idFootnotes ol._listStyleNone,
+section._idFootnotes li._idFootnote {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 1em !important;
+    line-height: 1.35 !important;
+}
 """
 
 def procesar_y_combinar_css(rutas_css_origen: List[str]) -> str:
