@@ -99,7 +99,7 @@ def _generar_identificadores_bmdc(contenido: ContenidoArticulo, nombre_revista: 
 
     line1 = f"Boletín Mexicano de Derecho Comparado, {vol_num}, {meses_ano}, {e_id}"
     line2 = f'e-ISSN: 2448-4873  DOI: {doi_html}'
-    line3 = 'Esta obra está bajo una <a href="https://creativecommons.org/licenses/by-nc/4.0/"><span class="hipervinculo">Licencia Creative Commons Reconocimiento 4.0 Internacional</span></a>'
+    line3 = 'Esta obra está bajo una <a href="https://creativecommons.org/licenses/by-nc/4.0/"><span class="hipervinculo">Licencia Creative Commons Reconocimiento-NoComercial 4.0 Internacional</span></a>'
     line4 = 'Instituto de Investigaciones Jurídicas de la Universidad Nacional Autónoma de México'
 
     return [line1, line2, line3, line4]
