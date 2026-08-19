@@ -1,34 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <style xmlns="http://purl.org/net/xbiblio/csl" class="note" default-locale="es-MX" initialize-with=". " page-range-format="chicago-16" version="1.0">
   <info>
-    <title>IIJ-UNAM notas jurídicas</title>
+    <title>Instituto de Investigaciones Jurídicas - UNAM (notas, Español - México)</title>
     <title-short>IIJ-UNAM</title-short>
-    <id>http://www.zotero.org/styles/iij-unam-notas-juridicas</id>
-    <link href="http://www.zotero.org/styles/iij-unam-notas-juridicas" rel="self"/>
-    <link href="https://www.chicagomanualofstyle.org/" rel="documentation"/>
-    <link href="https://zotero.org/groups/2205533/collections/5V67EPX3" rel="documentation"/>
+    <id>http://www.zotero.org/styles/instituto-de-investigaciones-juridicas-unam-notas</id>
+    <link href="http://www.zotero.org/styles/instituto-de-investigaciones-juridicas-unam-notas" rel="self"/>
+    <link href="http://www.zotero.org/styles/chicago-note-bibliography" rel="template"/>
+    <link href="https://www.juridicas.unam.mx/" rel="documentation"/>
     <author>
-      <name>Andrew Dunning</name>
-      <uri>https://orcid.org/0000-0003-0464-5036</uri>
+      <name>Jeremy Alexis Ventura Ricardez</name>
+      <email>jeremyalexis_132@hotmail.com</email>
     </author>
     <category citation-format="note"/>
-    <category field="anthropology"/>
-    <category field="communications"/>
-    <category field="generic-base"/>
-    <category field="geography"/>
-    <category field="history"/>
-    <category field="humanities"/>
     <category field="law"/>
-    <category field="linguistics"/>
-    <category field="literature"/>
-    <category field="philosophy"/>
-    <category field="political_science"/>
-    <category field="science"/>
     <category field="social_science"/>
-    <category field="sociology"/>
-    <category field="theology"/>
-    <summary>Chicago-style source citations (with Bluebook for legal citations), notes and bibliography system</summary>
-    <updated>2026-04-14T07:08:20+00:00</updated>
+    <summary>Estilo de citación para el Instituto de Investigaciones Jurídicas de la UNAM (IIJ-UNAM).</summary>
+    <updated>2023-10-25T00:00:00+00:00</updated>
     <rights license="http://creativecommons.org/licenses/by-sa/3.0/">This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 License</rights>
   </info>
   <locale xml:lang="es-MX">
@@ -59,8 +46,18 @@
     </term>
     <term form="verb" name="translator">trad. de</term>
     <term form="verb-short" name="translator">trad. de</term>
-    <term form="verb-short" name="editor">ed. de</term>
-    <term form="verb-short" name="collection-editor">coord. de</term>
+    <term name="editor" form="short">
+  <single>ed.</single>
+  <multiple>eds.</multiple>
+</term>
+<term name="collection-editor" form="short">
+  <single>coord.</single>
+  <multiple>coords.</multiple>
+</term>
+<term name="compiler" form="short">
+  <single>comp.</single>
+  <multiple>comps.</multiple>
+</term>
     <term form="verb-short" name="editor-translator">ed. y trad. de</term>
     <term form="short" name="edition">
       <single>ed.</single>
@@ -3878,33 +3875,32 @@
       </choose>
     </group>
   </macro>
-  <macro name="source-event-bib">
-    <group delimiter=", ">
+<macro name="source-event-bib">
+    <group delimiter=" ">
       <choose>
-        <if variable="event">
-          <group delimiter=" ">
-            <text term="presented at"/>
-            <text variable="event"/>
-          </group>
-        </if>
+        <if match="any" type="interview" variable="interviewer"/>
+        <else-if type="personal_communication" variable="recipient"/>
+        <else-if match="any" type="review review-book" variable="reviewed-author reviewed-genre reviewed-title"/>
+        <else-if match="any" variable="event event-date event-title">
+          <choose>
+            <if type="paper-conference">
+              <choose>
+                <if match="none" variable="collection-editor compiler editor editorial-director issue page supplement-number volume">
+                  <text macro="source-event-status-bib"/>
+                  <text macro="source-event-description-bib"/>
+                </if>
+              </choose>
+            </if>
+            <else>
+              <text macro="source-event-status-bib"/>
+              <text macro="source-event-description-bib"/>
+            </else>
+          </choose>
+        </else-if>
       </choose>
-      <text macro="source-event-publisher-place-date-bib"/>
     </group>
   </macro>
 
-  <macro name="source-event-note">
-    <group delimiter=", ">
-      <choose>
-        <if variable="event">
-          <group delimiter=" ">
-            <text term="presented at"/>
-            <text variable="event"/>
-          </group>
-        </if>
-      </choose>
-      <text macro="source-event-publisher-place-date-note"/>
-    </group>
-  </macro>
   <macro name="source-event-note">
     <group delimiter=" ">
       <choose>
@@ -4838,44 +4834,47 @@
       <text variable="archive-place"/>
     </group>
   </macro>
-  <macro name="source-date-accessed-DOI-URL-bib">
-    <choose>
-      <if variable="DOI">
-        <text macro="source-DOI-URL"/>
-      </if>
-      <else-if match="any" variable="available-date event-date issued status accessed URL">
-        <choose>
-          <if match="all" variable="accessed URL">
-            <group delimiter=" ">
-              <group delimiter=" ">
-                <text term="accessed" text-case="capitalize-first"/>
-                <date form="text" variable="accessed"/>
-              </group>
-              <text macro="source-DOI-URL"/>
-            </group>
-          </if>
-          <else-if variable="URL">
-            <text macro="source-DOI-URL"/>
-          </else-if>
-        </choose>
-      </else-if>
-    </choose>
-  </macro>
-  <macro name="source-date-accessed-DOI-URL-note">
-    <group delimiter=", ">
-      <choose>
-        <if variable="DOI"/>
-        <else-if match="any" variable="available-date event-date issued status"/>
-        <else-if variable="accessed URL">
-          <group delimiter=" ">
-            <text term="accessed"/>
-            <date form="text" variable="accessed"/>
-          </group>
-        </else-if>
-      </choose>
-      <text macro="source-DOI-URL"/>
-    </group>
-  </macro>
+ <macro name="source-date-accessed-DOI-URL-bib">
+  <choose>
+    <if variable="DOI">
+      <text prefix="https://doi.org/" variable="DOI"/>
+    </if>
+    <else-if variable="URL">
+      <group delimiter=" ">
+        <text variable="URL"/>
+        <!-- ¡Nota el punto agregado aquí en suffix=")." ! -->
+        <group prefix="(fecha de consulta: " suffix=").">
+          <date variable="accessed">
+            <date-part name="day" suffix=" de "/>
+            <date-part name="month" suffix=" de " text-case="lowercase"/>
+            <date-part name="year"/>
+          </date>
+        </group>
+      </group>
+    </else-if>
+  </choose>
+</macro>
+
+<macro name="source-date-accessed-DOI-URL-note">
+  <choose>
+    <if variable="DOI">
+      <text prefix="https://doi.org/" variable="DOI"/>
+    </if>
+    <else-if variable="URL">
+      <group delimiter=" ">
+        <text variable="URL"/>
+        <!-- ¡Nota el punto agregado aquí en suffix=")." ! -->
+        <group prefix="(fecha de consulta: " suffix=").">
+          <date variable="accessed">
+            <date-part name="day" suffix=" de "/>
+            <date-part name="month" suffix=" de " text-case="lowercase"/>
+            <date-part name="year"/>
+          </date>
+        </group>
+      </group>
+    </else-if>
+  </choose>
+</macro>
   <macro name="source-DOI-URL">
   <choose>
     <if variable="DOI">
@@ -5208,24 +5207,25 @@
     </group>
   </macro>
  <macro name="citation-notes-shortened-author-title-item">
-    <group delimiter=", ">
-      <text macro="author-short"/>
-      <choose>
-        <if match="any" type="bill hearing legal_case legislation regulation treaty">
-          <text macro="title-short"/>
-        </if>
-        <else-if disambiguate="true">
-          <group delimiter=", ">
-            <text macro="title-short"/>
-            <text value="cit." font-style="italic"/>
-          </group>
-        </else-if>
-        <else>
-          <text value="op. cit." font-style="italic"/>
-        </else>
-      </choose>
-    </group>
-  </macro>
+  <group delimiter=", ">
+    <text macro="author-short"/>
+    <choose>
+      <if match="any" type="bill hearing legal_case legislation regulation treaty">
+        <text macro="title-short"/>
+      </if>
+      <else-if disambiguate="true">
+        <group delimiter=", ">
+          <!-- Se agregan los puntos suspensivos al título corto -->
+          <text macro="title-short" suffix="..."/>
+          <text value="cit." font-style="italic"/>
+        </group>
+      </else-if>
+      <else>
+        <text value="op. cit." font-style="italic"/>
+      </else>
+    </choose>
+  </group>
+</macro>
   <macro name="citation-notes-shortened-author-title-disambiguate">
     <group delimiter=", ">
       <choose>
