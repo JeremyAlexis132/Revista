@@ -30,6 +30,7 @@ class ContenidoArticulo:
     keywords: str = ""
     secciones_cuerpo: List[str] = field(default_factory=list)
     referencias: List[str] = field(default_factory=list)
+    declaraciones_etica: List[str] = field(default_factory=list)
     fechas: List[str] = field(default_factory=list)
     como_citar: List[str] = field(default_factory=list)
     notas_html: str = ""
@@ -99,11 +100,9 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
     # ==============================================================
     # LIMPIEZA DE SALTOS DE LÍNEA Y CARACTERES INVISIBLES DE INDESIGN
     # ==============================================================
-    # 1. Convierte los <br> (Soft returns) en espacios
     for br in soup.find_all("br"):
         br.replace_with(" ")
 
-    # 2. Elimina guiones blandos (\xad) y espacios de ancho cero (\u200b)
     for text_node in soup.find_all(string=True):
         if '\xad' in text_node or '\u200b' in text_node:
             text_node.replace_with(text_node.replace('\xad', '').replace('\u200b', ''))
@@ -158,7 +157,6 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 contenido.fechas[-1] += " " + texto_limpio
             else:
                 contenido.fechas.append(texto_limpio)
-            
             capturando_fecha_fragmentada = not has_digits
             continue
         elif capturando_fecha_fragmentada and has_digits and len(texto_limpio) < 50:
@@ -220,9 +218,61 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             fase = "referencias"
             continue
 
-        if "como_citar" in clases or "iijunam" in clases or "apa" in clases.split() or texto_lower == "cómo citar":
+        # --- INICIO BLOQUE: DECLARACIONES ÉTICAS, IA Y AGRADECIMIENTOS ---
+        es_declaracion_etica_titulo = False
+        
+        # Diccionario ampliado de títulos soportados en ES, EN, PT y FR
+        kw_titulos_etica = [
+            # Español
+            "declaración de uso de ia", "declaracion de uso de ia", 
+            "conflicto de intereses", "declaración de conflicto de intereses", "declaracion de conflicto de intereses", 
+            "autoría", "autoria", "agradecimientos", "agradecimiento",
+            # Inglés
+            "declaration of ai use", "ai use declaration", 
+            "conflict of interest", "declaration of interest", "declaration of interests", 
+            "authorship", "acknowledgment", "acknowledgments", "acknowledgement", "acknowledgements",
+            # Portugués
+            "declaração de uso de ia", "declaracao de uso de ia", 
+            "conflito de interesses", "declaração de conflito de interesses", "declaracao de conflito de interesses", 
+            "autoria", "agradecimentos", "agradecimento",
+            # Francés
+            "déclaration d'utilisation de l'ia", "declaration d'utilisation de l'ia", 
+            "conflit d'intérêts", "conflit d'interets", "déclaration de conflit d'intérêts", "declaration de conflit d'interets", 
+            "qualité d'auteur", "qualite d'auteur", "remerciements", "remerciement"
+        ]
+        
+        # Filtro estricto: Solo lo marca como título si es una etiqueta de encabezado (h1-h6) 
+        # o si la línea es EXACTAMENTE el nombre de la sección (evitando atrapar los párrafos)
+        if any(kw in texto_lower for kw in kw_titulos_etica):
+            if elem.name.startswith("h") or texto_lower in kw_titulos_etica:
+                es_declaracion_etica_titulo = True
+        
+        if es_declaracion_etica_titulo:
+            # Separador entre bloques si aparecen múltiples de estos apartados
+            if contenido.declaraciones_etica:
+                contenido.declaraciones_etica.append('<hr class="HorizontalRule-1" />')
+            
+            # Asignar estilo estandarizado para los títulos
+            elem.name = "h4"
+            elem["class"] = ["declaracion_titulo"]
+            
+            contenido.declaraciones_etica.append(str(elem))
+            fase = "declaraciones"
+            continue
+        # --- FIN BLOQUE ---
+
+        kw_como_citar = ["cómo citar", "como citar", "how to cite", "comment citer"]
+        if "como_citar" in clases or "iijunam" in clases or "apa" in clases.split() or texto_lower in kw_como_citar:
             contenido.como_citar.append(str_elem)
             fase = "como_citar"
+            continue
+
+        # Captura de párrafos para las declaraciones éticas antes del bloque de cómo citar
+        if fase == "declaraciones":
+            if texto_limpio or elem.name in ["table", "img", "hr"]:
+                if elem.name == "p":
+                    elem["class"] = ["declaracion_texto"]
+                contenido.declaraciones_etica.append(str(elem))
             continue
 
         if fase == "como_citar":
@@ -272,8 +322,13 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
 
     bloques_post = []
 
-    if contenido.fechas or contenido.como_citar or contenido.notas_html:
+    if contenido.declaraciones_etica or contenido.fechas or contenido.como_citar or contenido.notas_html:
         bloques_post.append('<hr class="HorizontalRule-1" />')
+
+    if contenido.declaraciones_etica:
+        bloques_post.extend(contenido.declaraciones_etica)
+        if contenido.fechas or contenido.como_citar or contenido.notas_html:
+            bloques_post.append('<hr class="HorizontalRule-1" />')
 
     if contenido.fechas:
         fechas_unidas = "<br>\n\t\t\t\t".join(f for f in contenido.fechas if f)
