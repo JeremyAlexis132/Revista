@@ -1,6 +1,6 @@
 """
 App de escritorio para procesar revistas académicas sin usar terminal.
-Soporta procesamiento dinámico de RMDE, CC y BMDC.
+Soporta procesamiento dinámico de RMDE, CC, RMDH y BMDC.
 """
 
 import os
@@ -40,12 +40,14 @@ from Modules.core.utils_base import (
 # Importar utilidades y procesadores CSS por revista
 from Modules.journals.rmde import utils as utils_rmde, css_processor as css_rmde
 from Modules.journals.cc import utils as utils_cc, css_processor as css_cc
+from Modules.journals.rmdh import utils as utils_rmdh, css_processor as css_rmdh
 from Modules.journals.bmdc import utils as utils_bmdc, css_processor as css_bmdc
 
 # Mapeo dinámico de revistas soportadas
 JOURNALS = {
     "rmde": {"utils": utils_rmde, "css_processor": css_rmde.procesar_y_combinar_css},
     "cc": {"utils": utils_cc, "css_processor": css_cc.procesar_y_combinar_css},
+    "rmdh": {"utils": utils_rmdh, "css_processor": css_rmdh.procesar_y_combinar_css},
     "bmdc": {"utils": utils_bmdc, "css_processor": css_bmdc.procesar_y_combinar_css},
 }
 
@@ -203,7 +205,7 @@ class RevistaApp(QMainWindow):
         errores = []
         revista = identificar_revista(folder_name)
         if not revista:
-            errores.append(f"La carpeta '{folder_name}' no corresponde a una revista soportada (RMDE, CC, BMDC).")
+            errores.append(f"La carpeta '{folder_name}' no corresponde a una revista soportada (RMDE, CC, RMDH, BMDC).")
             return errores
             
         revista_id = JOURNALS[revista]["utils"].extraer_id_de_carpeta(folder_name)

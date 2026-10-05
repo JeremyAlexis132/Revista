@@ -58,17 +58,14 @@ def crear_estructura_salida(directorio_base: str, nombre_carpeta: str) -> Dict[s
     }
 
 def copiar_imagenes(ruta_origen: str, ruta_destino: str) -> None:
-    carpetas_img = []
+    extensiones_imagen = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')
     for root, dirs, files in os.walk(ruta_origen):
-        if os.path.basename(root).lower() == "image":
-            carpetas_img.append(root)
-
-    for carpeta in carpetas_img:
-        for item in os.listdir(carpeta):
-            if item.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')):
-                src = os.path.join(carpeta, item)
-                nombre = urllib.parse.unquote(item)
-                nombre = unicodedata.normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('utf-8')
-                nombre = re.sub(r'[^\w\.-]', '_', nombre)
-                dst = os.path.join(ruta_destino, nombre)
-                shutil.copy2(src, dst)
+        for item in files:
+            if not item.lower().endswith(extensiones_imagen):
+                continue
+            src = os.path.join(root, item)
+            nombre = urllib.parse.unquote(item)
+            nombre = unicodedata.normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('utf-8')
+            nombre = re.sub(r'[^\w\.-]', '_', nombre)
+            dst = os.path.join(ruta_destino, nombre)
+            shutil.copy2(src, dst)

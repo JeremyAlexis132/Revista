@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Gestor principal del procesador de revistas académicas.
-Procesa automáticamente todas las carpetas detectando a qué revista pertenecen (RMDE, CC, BMDC).
+Procesa automáticamente todas las carpetas detectando a qué revista pertenecen (RMDE, CC, RMDH, BMDC).
 """
 
 import os
@@ -38,6 +38,15 @@ from Modules.journals.cc.utils import (
     es_carpeta_valida as valida_cc
 )
 from Modules.journals.cc.css_processor import procesar_y_combinar_css as css_cc
+
+# Importaciones de RMDH
+from Modules.journals.rmdh.utils import (
+    extraer_id_de_carpeta as ext_id_rmdh,
+    extraer_codigo_seccion as ext_sec_rmdh,
+    construir_clave_bitacora as bitacora_rmdh,
+    es_carpeta_valida as valida_rmdh
+)
+from Modules.journals.rmdh.css_processor import procesar_y_combinar_css as css_rmdh
 
 # Importaciones de BMDC
 from Modules.journals.bmdc.utils import (
@@ -136,6 +145,12 @@ def main() -> None:
             ext_sec = ext_sec_cc
             const_bit = bitacora_cc
             proc_css = css_cc
+        elif valida_rmdh(nombre):
+            revista = "rmdh"
+            ext_id = ext_id_rmdh
+            ext_sec = ext_sec_rmdh
+            const_bit = bitacora_rmdh
+            proc_css = css_rmdh
         elif valida_bmdc(nombre):
             revista = "bmdc"
             ext_id = ext_id_bmdc
@@ -143,7 +158,7 @@ def main() -> None:
             const_bit = bitacora_bmdc
             proc_css = css_bmdc
         else:
-            print(f"  [Ignorado] '{nombre}': No cumple formato RMDE, CC ni BMDC.")
+            print(f"  [Ignorado] '{nombre}': No cumple formato RMDE, CC, RMDH ni BMDC.")
             continue
 
         revista_id = ext_id(nombre)

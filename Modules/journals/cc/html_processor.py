@@ -11,6 +11,62 @@ from typing import List, Optional
 from dataclasses import dataclass, field
 from bs4 import BeautifulSoup, Tag
 
+# ----------------------------------------------------------------------
+# NORMALIZACIÓN DE ESTILOS DE INDESIGN
+# Algunos artículos (p. ej. 19395) se exportan con estilos de párrafo
+# prefijados ("ESTILOS-FINALES_TCC-1", "ESTILOS-FINALES_VV", ...) y con
+# <p> en lugar de <h1>/<h2>/<h3>. Otros (p. ej. 20819) ya vienen con los
+# nombres limpios. Aquí se lleva todo al esquema limpio que entiende el CSS.
+# ----------------------------------------------------------------------
+_RE_PREFIJO_ESTILO = re.compile(r"^ESTILOS[-_]FINALES[-_]", re.IGNORECASE)
+
+# clase (minúsculas, ya sin prefijo) -> (etiqueta, clase semántica)
+_MAPA_ESTILOS_SEMANTICOS = {
+    "tcc-1": ("h1", "titulo_espanol"),
+    "tcc-2": ("h2", "titulo_ingles"),
+    "vv":    ("h3", "romanos"),
+    "ia":    ("h4", "arabigos"),
+    "is":    ("h5", "subarabigos"),
+}
+
+_KW_COMO_CITAR = ["cómo citar", "como citar", "how to cite", "comment citer"]
+_RE_KEYWORDS_EN = re.compile(r"^\s*(keywords?|key\s+words|mots[\s-]*cl[eé]s?)\b", re.IGNORECASE)
+
+def _normalizar_clases_indesign(soup: BeautifulSoup) -> None:
+    """Quita el prefijo ESTILOS-FINALES_ y convierte los <p> de título y
+    encabezados a etiquetas semánticas (h1..h5) con las clases que usa el CSS."""
+    for tag in soup.find_all(True):
+        clases = tag.get("class")
+        if not clases:
+            continue
+        nuevas = [_RE_PREFIJO_ESTILO.sub("", c) for c in clases]
+
+        if tag.name in ("p", "div"):
+            for i, c in enumerate(nuevas):
+                destino = _MAPA_ESTILOS_SEMANTICOS.get(c.lower())
+                if destino:
+                    tag.name = destino[0]
+                    nuevas[i] = destino[1]
+                    break
+        tag["class"] = nuevas
+
+def _reetiquetar_parrafo(elem: Tag, clase: str, texto: str) -> None:
+    """Deja el elemento como <p class="..."> con texto plano (sin spans de InDesign)."""
+    elem.name = "p"
+    elem["class"] = [clase]
+    elem.clear()
+    elem.append(texto)
+
+def _es_titulo_declaracion(elem: Tag, texto_lower: str, palabras: List[str]) -> bool:
+    """Un encabezado de declaración ética debe *ser* la palabra clave (con o sin
+    numeración/puntuación), no simplemente contenerla dentro de un título largo."""
+    base = re.sub(r"^\s*(?:[ivxlc]+|\d+)[.)]\s+", "", texto_lower.strip())
+    base = base.strip(" .:;–—-")
+    if base in palabras:
+        return True
+    es_encabezado = elem.name.startswith("h") or "romanos" in (elem.get("class") or []) or "arabigos" in (elem.get("class") or [])
+    return es_encabezado and len(base) < 60 and any(base.startswith(kw) for kw in palabras)
+
 @dataclass
 class Autor:
     nombre_html: str = ""
@@ -109,6 +165,8 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
 
     for span in soup.find_all("span", class_="no-separar"):
         span.unwrap()
+
+    _normalizar_clases_indesign(soup)
         
     for img in soup.find_all("img"):
         if "logo_findearticulo" in img.get("src", "").lower() or "logo_cc_fin" in img.get("src", "").lower():
@@ -136,7 +194,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             contenido.doi_extraido = _extraer_url_doi(texto_limpio)
             continue
 
-        is_date_class = "recepcion" in clases or "aceptacion-publicacion" in clases
+        is_date_class = "recepcion" in clases or "aceptacion-publicacion" in clases or "recibido-y-aceptado-final" in clases
         has_date_kw = bool(re.search(r'\b(recepci[óo]n|recibido|aceptaci[óo]n|aceptado|publicaci[óo]n|publicado|aprobaci[óo]n|aprobado)\b', texto_lower))
         has_digits = bool(re.search(r'\d', texto_lower))
         is_email_or_inst = "@" in texto_lower or "universidad" in texto_lower or "instituto" in texto_lower or "facultad" in texto_lower
@@ -167,15 +225,15 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         else:
             capturando_fecha_fragmentada = False
 
-        if "titulo_espanol" in clases:
+        if "titulo_espanol" in clases or "tcc-1" in clases:
             contenido.titulo_es = str_elem
             continue
             
-        if "titulo_ingles" in clases:
+        if "titulo_ingles" in clases or "tcc-2" in clases:
             contenido.titulo_en = str_elem
             continue
 
-        if "aut-dos-nombres" in clases or "aut" in clases.split():
+        if "aut-dos-nombres" in clases or "aut" in clases.split() or "estilos-finales_aut" in clases:
             if autor_actual:
                 contenido.autores_obj.append(autor_actual)
             autor_actual = Autor(nombre_html=_obtener_html_interno(elem))
@@ -202,7 +260,12 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             continue
             
         if "palabras-clave" in clases:
-            contenido.palabras_clave = str_elem
+            # En algunos artículos "Keywords" también viene con la clase palabras-clave
+            if _RE_KEYWORDS_EN.match(texto_limpio) or (contenido.palabras_clave and not contenido.keywords):
+                elem["class"] = ["keywords"]
+                contenido.keywords = str(elem)
+            else:
+                contenido.palabras_clave = str_elem
             continue
 
         if "resumen_ingles" in clases:
@@ -213,61 +276,60 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             contenido.keywords = str_elem
             continue
 
-        if "referencias" in clases or "bib" in clases.split():
+        if texto_lower in _KW_COMO_CITAR:
+            _reetiquetar_parrafo(elem, "como_citar", texto_limpio)
+            contenido.como_citar.append(str(elem))
+            fase = "como_citar"
+            continue
+        if fase == "como_citar" and texto_lower in ("iij-unam", "iijunam", "iij unam"):
+            _reetiquetar_parrafo(elem, "iijunam", texto_limpio)
+            contenido.como_citar.append(str(elem))
+            continue
+        if fase == "como_citar" and texto_lower == "apa":
+            _reetiquetar_parrafo(elem, "APA", texto_limpio)
+            contenido.como_citar.append(str(elem))
+            continue
+
+        if fase != "como_citar" and ("referencias" in clases or "bib" in clases.split()):
             contenido.referencias.append(str_elem)
             fase = "referencias"
             continue
 
         # --- INICIO BLOQUE: DECLARACIONES ÉTICAS, IA Y AGRADECIMIENTOS ---
         es_declaracion_etica_titulo = False
-        
-        # Diccionario ampliado de títulos soportados en ES, EN, PT y FR
         kw_titulos_etica = [
-            # Español
             "declaración de uso de ia", "declaracion de uso de ia", 
             "conflicto de intereses", "declaración de conflicto de intereses", "declaracion de conflicto de intereses", 
             "autoría", "autoria", "agradecimientos", "agradecimiento",
-            # Inglés
             "declaration of ai use", "ai use declaration", 
             "conflict of interest", "declaration of interest", "declaration of interests", 
             "authorship", "acknowledgment", "acknowledgments", "acknowledgement", "acknowledgements",
-            # Portugués
             "declaração de uso de ia", "declaracao de uso de ia", 
             "conflito de interesses", "declaração de conflito de interesses", "declaracao de conflito de interesses", 
             "autoria", "agradecimentos", "agradecimento",
-            # Francés
             "déclaration d'utilisation de l'ia", "declaration d'utilisation de l'ia", 
             "conflit d'intérêts", "conflit d'interets", "déclaration de conflit d'intérêts", "declaration de conflit d'interets", 
             "qualité d'auteur", "qualite d'auteur", "remerciements", "remerciement"
         ]
         
-        # Filtro estricto: Solo lo marca como título si es una etiqueta de encabezado (h1-h6) 
-        # o si la línea es EXACTAMENTE el nombre de la sección (evitando atrapar los párrafos)
-        if any(kw in texto_lower for kw in kw_titulos_etica):
-            if elem.name.startswith("h") or texto_lower in kw_titulos_etica:
-                es_declaracion_etica_titulo = True
+        if fase != "como_citar" and texto_limpio and _es_titulo_declaracion(elem, texto_lower, kw_titulos_etica):
+            es_declaracion_etica_titulo = True
         
         if es_declaracion_etica_titulo:
-            # Separador entre bloques si aparecen múltiples de estos apartados
             if contenido.declaraciones_etica:
                 contenido.declaraciones_etica.append('<hr class="HorizontalRule-1" />')
-            
-            # Asignar estilo estandarizado para los títulos
             elem.name = "h4"
             elem["class"] = ["declaracion_titulo"]
-            
             contenido.declaraciones_etica.append(str(elem))
             fase = "declaraciones"
             continue
         # --- FIN BLOQUE ---
 
-        kw_como_citar = ["cómo citar", "como citar", "how to cite", "comment citer"]
-        if "como_citar" in clases or "iijunam" in clases or "apa" in clases.split() or texto_lower in kw_como_citar:
+        if "como_citar" in clases or "iijunam" in clases or "apa" in clases.split():
             contenido.como_citar.append(str_elem)
             fase = "como_citar"
             continue
 
-        # Captura de párrafos para las declaraciones éticas antes del bloque de cómo citar
         if fase == "declaraciones":
             if texto_limpio or elem.name in ["table", "img", "hr"]:
                 if elem.name == "p":
@@ -282,9 +344,23 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 contenido.como_citar.append(str_elem)
             continue
 
-        if texto_limpio or elem.name in ["table", "img", "hr"]:
-            if elem.name == "table":
+        if texto_limpio or elem.name in ["table", "img", "hr"] or elem.find("img"):
+            # CORRECCIÓN: Transformar elementos con clase de InDesign a etiquetas semánticas
+            if "subarabigos" in clases:
+                elem.name = "h5"
+                elem["class"] = ["subarabigos"]
+                str_elem = str(elem)
+            elif "romanos" in clases:
+                elem.name = "h3"
+                elem["class"] = ["romanos"]
+                str_elem = str(elem)
+            elif "arabigos" in clases:
+                elem.name = "h4"
+                elem["class"] = ["arabigos"]
+                str_elem = str(elem)
+            elif elem.name == "table":
                 str_elem = f'<div class="table-responsive">\n{elem}\n</div>'
+                
             contenido.secciones_cuerpo.append(str_elem)
 
     if autor_actual:
@@ -382,10 +458,15 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
     return html
 
 def _corregir_rutas_imagenes(html: str) -> str:
-    def reemplazar_y_sanitizar(match):
-        nombre = unicodedata.normalize('NFKD', urllib.parse.unquote(match.group(1))).encode('ASCII', 'ignore').decode('utf-8')
-        return f'src="{re.sub(r"[^\w\.-]", "_", nombre)}"'
-    return re.sub(r'src="[^"]*?(?:web-resources/image/|image/)([^"]+)"', reemplazar_y_sanitizar, html)
+    soup = BeautifulSoup(html, "html.parser")
+    for imagen in soup.find_all("img", src=True):
+        src = urllib.parse.unquote(imagen["src"])
+        if "web-resources/" not in src:
+            continue
+        nombre = src.split("web-resources/", 1)[1].split("/")[-1]
+        nombre = unicodedata.normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('utf-8')
+        imagen["src"] = re.sub(r"[^\w\.-]", "_", nombre)
+    return str(soup)
 
 def procesar_html(html_path: str, css_inline: str, ruta_salida_html: str, nombre_revista: str, tipo_articulo_forzado: Optional[str] = None) -> bool:
     try:

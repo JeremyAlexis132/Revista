@@ -76,6 +76,23 @@ p {
     text-indent: 0 !important;
 }
 
+h4.declaracion_titulo {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 1.1em !important;
+    font-weight: bold !important;
+    text-align: left !important;
+    margin-top: 1.2em !important;
+    margin-bottom: 0.4em !important;
+}
+
+p.declaracion_texto {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 1.1em !important;
+    line-height: 1.6 !important;
+    text-align: justify !important;
+    text-indent: 0 !important;
+}
+
 /* =========================================================================
    TÍTULOS (Neutralización de centrado, sangrías y tamaños anómalos)
    ========================================================================= */
@@ -275,6 +292,21 @@ p.ESTILOS-FINALES_TRP, p.ESTILOS-FINALES_trs, p.ESTILOS-FINALES_trul, p.ESTILOS-
     padding-left: 0 !important;
     color: #000000 !important;
     text-indent: 0 !important;
+    display: block !important;
+    clear: both !important;
+    width: auto !important;
+    box-sizing: border-box !important;
+    overflow-wrap: break-word !important;
+    white-space: normal !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-indent: 0 !important;
+    margin-left: 2em !important;
+    margin-right: 1em !important;
+    margin-inline-start: 2em !important;
+    margin-inline-end: 1em !important;
+    margin-top: 0.8em !important;
+    margin-bottom: 0.8em !important;
 }
 
 .grises-vv, .bold-grises-redondas, .bold-grises-italicas, .BOLD-ITALIC {
@@ -355,7 +387,21 @@ p.pie-figura * { font-size: 1em !important; font-family: inherit !important; }
 .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; display: block; margin: 1.4em 0; }
 table { width: 100% !important; border-collapse: collapse !important; margin: 0 !important; }
 table td, table th { font-family: 'Times New Roman', Times, serif !important; font-size: 1em !important; text-align: justify !important; padding: 0.6em !important; }
-@media (max-width: 768px) { table { min-width: 600px !important; } }
+@media (max-width: 768px) {
+    .contenedor {
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+        padding-left: 3% !important;
+        padding-right: 3% !important;
+    }
+    .contenedor img {
+        max-width: 100% !important;
+    }
+    .table-responsive {
+        max-width: 100% !important;
+    }
+    table { min-width: 600px !important; }
+}
 section._idFootnotes {
     margin-top: 2em;
     border-top: 1px solid #ccc;

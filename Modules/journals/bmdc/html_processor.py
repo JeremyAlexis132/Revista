@@ -23,6 +23,7 @@ class ContenidoArticulo:
     secciones_cuerpo: List[str] = field(default_factory=list)
     referencias: List[str] = field(default_factory=list)
     fechas: List[str] = field(default_factory=list)
+    declaraciones_etica: List[str] = field(default_factory=list)
     como_citar: List[str] = field(default_factory=list)
     notas_html: str = ""
     doi_extraido: str = ""
@@ -64,6 +65,18 @@ def _extraer_url_doi(texto: str) -> str:
     url = match.group(1).rstrip(".,;<>\"'")
     url = url if url.startswith("http") else "https://doi.org/" + url
     return url.replace("10.22201/iij/", "10.22201/iij.")
+
+
+def _es_titulo_declaracion(texto: str) -> bool:
+    texto_normalizado = re.sub(r"^\s*(?:[ivxlc]+|\d+)[.)]\s*", "", texto.lower()).strip(" .:;- ")
+    texto_normalizado = unicodedata.normalize("NFKD", texto_normalizado).encode("ascii", "ignore").decode("ascii")
+    titulos = (
+        "declaracion de uso de ia", "declaraci?n de uso de ia", "ai use declaration",
+        "conflicto de intereses", "conflicto de interes", "conflict of interest", "conflicts of interest",
+        "autoria", "authorship", "agradecimientos", "agradecimiento",
+        "acknowledgment", "acknowledgments", "acknowledgement", "acknowledgements",
+    )
+    return texto_normalizado in titulos
 
 def _generar_identificadores_bmdc(contenido: ContenidoArticulo, nombre_revista: str) -> List[str]:
     revista_id = str(nombre_revista.split('_')[0])
@@ -294,6 +307,25 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             fase = "cuerpo"; continue
 
         is_como_citar = "como_citar" in clases or "iijunam" in clases_limpias or "apa" in clases_limpias or texto_lower == "cómo citar"
+
+        if _es_titulo_declaracion(texto_limpio):
+            elem.name = "h4"
+            elem["class"] = ["declaracion_titulo"]
+            contenido.declaraciones_etica.append(str(elem))
+            fase = "declaraciones"
+            continue
+
+        if fase == "declaraciones":
+            if is_como_citar:
+                elem["class"] = ["como_citar"]
+                contenido.como_citar.append(str(elem))
+                fase = "como_citar"
+            elif elem.name != "hr" and (texto_limpio or elem.find(["img", "table"])):
+                if elem.name == "p":
+                    elem["class"] = ["declaracion_texto"]
+                contenido.declaraciones_etica.append(str(elem))
+            continue
+
         if is_como_citar:
             elem['class'] = ['como_citar']
             _activar_enlaces_html(elem)
@@ -453,7 +485,11 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
     html_frontales = "\n\t\t\t\t".join(bloques_frontales) if bloques_frontales else ""
 
     bloques_post = []
-    if contenido.fechas or contenido.como_citar or contenido.notas_html: bloques_post.append('<hr class="HorizontalRule-1" />')
+    if contenido.declaraciones_etica or contenido.fechas or contenido.como_citar or contenido.notas_html:
+        bloques_post.append('<hr class="HorizontalRule-1" />')
+    if contenido.declaraciones_etica:
+        bloques_post.extend(contenido.declaraciones_etica)
+        bloques_post.append('<hr class="HorizontalRule-1" />')
     if contenido.fechas:
         fechas_unidas = "<br>\n\t\t\t\t\t".join(f for f in contenido.fechas if f)
         bloques_post.append(f'<div class="bloque-fechas-inferior">\n\t\t\t\t\t<p class="recepcion">{fechas_unidas}</p>\n\t\t\t\t</div>')

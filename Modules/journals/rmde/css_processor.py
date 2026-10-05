@@ -408,15 +408,43 @@ span.cursivas {
     font-weight: normal;
 }
 
+h4.declaracion_titulo {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 1.1em !important;
+    font-weight: bold !important;
+    text-align: left !important;
+}
+
+p.declaracion_texto {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 1.1em !important;
+    line-height: 1.6 !important;
+    text-align: justify !important;
+    text-indent: 0 !important;
+}
+
 /* Tamaños correctos para citas y subcabeceras internas */
 p.TRUN {
-    font-size: 1em !important;
+    font-size: 1.1em !important;
     line-height: 1.45 !important;
     margin-top: 1.2em !important;
     margin-bottom: 1.2em !important;
     margin-left: 2.0em !important;
     text-align: justify !important;
     text-indent: 0 !important;
+    display: block !important;
+    clear: both !important;
+    width: auto !important;
+    box-sizing: border-box !important;
+    overflow-wrap: break-word !important;
+    white-space: normal !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-indent: 0 !important;
+    margin-left: 2em !important;
+    margin-right: 2em !important;
+    margin-inline-start: 2em !important;
+    margin-inline-end: 2em !important;
 }
 
 p.IS {
@@ -459,7 +487,15 @@ p.IS {
 
 @media (max-width: 768px) {
     .contenedor {
+        max-width: 100% !important;
+        overflow-x: hidden !important;
         padding: 4em 3% 1em 3%;
+    }
+    .contenedor img {
+        max-width: 100% !important;
+    }
+    .table-responsive {
+        max-width: 100% !important;
     }
     .Marco-de-texto-b-sico p.body_text2 {
         font-size: 1.2em;
