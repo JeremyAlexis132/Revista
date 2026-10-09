@@ -31,6 +31,35 @@ _MAPA_ESTILOS_SEMANTICOS = {
 
 _KW_COMO_CITAR = ["cómo citar", "como citar", "how to cite", "comment citer"]
 _RE_KEYWORDS_EN = re.compile(r"^\s*(keywords?|key\s+words|mots[\s-]*cl[eé]s?)\b", re.IGNORECASE)
+_DIGITOS_ARABIGOS = str.maketrans(
+    "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
+    "01234567890123456789",
+)
+
+
+def _normalizar_referencia_html(html: str) -> str:
+    """Corrige marcas RTL y dígitos árabes heredados en referencias."""
+    soup = BeautifulSoup(html, "html.parser")
+
+    for tag in soup.find_all(True):
+        idioma = tag.get("lang", "")
+        if idioma.lower().startswith("ar"):
+            del tag["lang"]
+        if tag.get("dir", "").lower() == "rtl":
+            del tag["dir"]
+        if tag.has_attr("style"):
+            estilo = tag["style"]
+            estilo = re.sub(r"(?i)(?:^|;)\s*direction\s*:\s*rtl\s*;?", "", estilo)
+            estilo = re.sub(r"(?i)(?:^|;)\s*unicode-bidi\s*:\s*(?:embed|bidi-override)\s*;?", "", estilo)
+            if estilo.strip(" ;"):
+                tag["style"] = estilo
+            else:
+                del tag["style"]
+
+    for texto in soup.find_all(string=True):
+        texto.replace_with(str(texto).translate(_DIGITOS_ARABIGOS))
+
+    return str(soup)
 
 def _normalizar_clases_indesign(soup: BeautifulSoup) -> None:
     """Quita el prefijo ESTILOS-FINALES_ y convierte los <p> de título y
@@ -291,7 +320,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             continue
 
         if fase != "como_citar" and ("referencias" in clases or "bib" in clases.split()):
-            contenido.referencias.append(str_elem)
+            contenido.referencias.append(_normalizar_referencia_html(str_elem))
             fase = "referencias"
             continue
 
