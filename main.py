@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """
 Gestor principal del procesador de revistas académicas.
-Procesa automáticamente todas las carpetas detectando a qué revista pertenecen (RMDE, CC, RMDH, BMDC).
+Procesa automáticamente todas las carpetas detectando a qué revista pertenecen
+(RMDE, CC, RMDH, BMDC, Problema).
+
+Para agregar una revista nueva: importar su utils y css_processor, y sumar una
+entrada a REVISTAS (y al diccionario _REVISTAS de Modules/core/sections).
 """
 
 import os
 import sys
 import time
+from dataclasses import dataclass
+from typing import Callable, List
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_DIR)
@@ -21,41 +27,43 @@ from Modules.core.utils_base import (
     registrar_en_bitacora,
 )
 
-# Importaciones de RMDE
-from Modules.journals.rmde.utils import (
-    extraer_id_de_carpeta as ext_id_rmde, 
-    extraer_codigo_seccion as ext_sec_rmde, 
-    construir_clave_bitacora as bitacora_rmde, 
-    es_carpeta_valida as valida_rmde
-)
-from Modules.journals.rmde.css_processor import procesar_y_combinar_css as css_rmde
+from Modules.journals.rmde import utils as utils_rmde, css_processor as css_rmde
+from Modules.journals.cc import utils as utils_cc, css_processor as css_cc
+from Modules.journals.rmdh import utils as utils_rmdh, css_processor as css_rmdh
+from Modules.journals.bmdc import utils as utils_bmdc, css_processor as css_bmdc
+from Modules.journals.p import utils as utils_p, css_processor as css_p
 
-# Importaciones de CC
-from Modules.journals.cc.utils import (
-    extraer_id_de_carpeta as ext_id_cc, 
-    extraer_codigo_seccion as ext_sec_cc, 
-    construir_clave_bitacora as bitacora_cc, 
-    es_carpeta_valida as valida_cc
-)
-from Modules.journals.cc.css_processor import procesar_y_combinar_css as css_cc
 
-# Importaciones de RMDH
-from Modules.journals.rmdh.utils import (
-    extraer_id_de_carpeta as ext_id_rmdh,
-    extraer_codigo_seccion as ext_sec_rmdh,
-    construir_clave_bitacora as bitacora_rmdh,
-    es_carpeta_valida as valida_rmdh
-)
-from Modules.journals.rmdh.css_processor import procesar_y_combinar_css as css_rmdh
+@dataclass(frozen=True)
+class Revista:
+    """Funciones propias de cada revista que necesita el flujo genérico."""
+    codigo: str                 # "rmde", "cc", ... (también define Salida/<CODIGO>)
+    es_valida: Callable         # ¿la carpeta pertenece a esta revista?
+    extraer_id: Callable
+    extraer_seccion: Callable
+    construir_clave: Callable   # clave que se guarda en bitacora.json
+    procesar_css: Callable
 
-# Importaciones de BMDC
-from Modules.journals.bmdc.utils import (
-    extraer_id_de_carpeta as ext_id_bmdc, 
-    extraer_codigo_seccion as ext_sec_bmdc, 
-    construir_clave_bitacora as bitacora_bmdc, 
-    es_carpeta_valida as valida_bmdc
-)
-from Modules.journals.bmdc.css_processor import procesar_y_combinar_css as css_bmdc
+
+def _revista(codigo: str, utils, css) -> Revista:
+    return Revista(
+        codigo=codigo,
+        es_valida=utils.es_carpeta_valida,
+        extraer_id=utils.extraer_id_de_carpeta,
+        extraer_seccion=utils.extraer_codigo_seccion,
+        construir_clave=utils.construir_clave_bitacora,
+        procesar_css=css.procesar_y_combinar_css,
+    )
+
+
+# El orden importa: la primera revista cuya es_valida() acepte la carpeta gana.
+REVISTAS: List[Revista] = [
+    _revista("rmde", utils_rmde, css_rmde),
+    _revista("cc", utils_cc, css_cc),
+    _revista("rmdh", utils_rmdh, css_rmdh),
+    _revista("bmdc", utils_bmdc, css_bmdc),
+    _revista("p", utils_p, css_p),
+]
 
 
 def resolver_archivos_dir() -> str:
@@ -75,6 +83,13 @@ def imprimir_banner() -> None:
     print("  PROCESADOR AUTOMÁTICO DE REVISTAS ACADÉMICAS")
     print("=" * 60)
 
+def detectar_revista(nombre_carpeta: str):
+    """Devuelve la Revista a la que pertenece la carpeta, o None."""
+    for revista in REVISTAS:
+        if revista.es_valida(nombre_carpeta):
+            return revista
+    return None
+
 def procesar_carpeta_revista(
     nombre_carpeta: str, 
     ruta_carpeta: str, 
@@ -90,7 +105,7 @@ def procesar_carpeta_revista(
 
     css_paths = encontrar_css_en_carpeta(ruta_carpeta)
     
-    # Crear la estructura dinámica en Salida/RMDE, Salida/CC, o Salida/BMDC
+    # Crear la estructura dinámica en Salida/RMDE, Salida/CC, Salida/P, etc.
     rutas = crear_estructura_salida(salida_base, nombre_carpeta)
 
     # 1. Obtener CSS unificado
@@ -130,39 +145,17 @@ def main() -> None:
     procesadas = 0
     omitidas = 0
     errores = 0
+    nombres_revistas = ", ".join(r.codigo.upper() for r in REVISTAS)
 
     for nombre, ruta in carpetas:
         # Detectar la revista dinámicamente
-        if valida_rmde(nombre):
-            revista = "rmde"
-            ext_id = ext_id_rmde
-            ext_sec = ext_sec_rmde
-            const_bit = bitacora_rmde
-            proc_css = css_rmde
-        elif valida_cc(nombre):
-            revista = "cc"
-            ext_id = ext_id_cc
-            ext_sec = ext_sec_cc
-            const_bit = bitacora_cc
-            proc_css = css_cc
-        elif valida_rmdh(nombre):
-            revista = "rmdh"
-            ext_id = ext_id_rmdh
-            ext_sec = ext_sec_rmdh
-            const_bit = bitacora_rmdh
-            proc_css = css_rmdh
-        elif valida_bmdc(nombre):
-            revista = "bmdc"
-            ext_id = ext_id_bmdc
-            ext_sec = ext_sec_bmdc
-            const_bit = bitacora_bmdc
-            proc_css = css_bmdc
-        else:
-            print(f"  [Ignorado] '{nombre}': No cumple formato RMDE, CC, RMDH ni BMDC.")
+        revista = detectar_revista(nombre)
+        if revista is None:
+            print(f"  [Ignorado] '{nombre}': No cumple formato de ninguna revista ({nombres_revistas}).")
             continue
 
-        revista_id = ext_id(nombre)
-        clave_bitacora = const_bit(nombre)
+        revista_id = revista.extraer_id(nombre)
+        clave_bitacora = revista.construir_clave(nombre)
 
         if revista_id is None or clave_bitacora is None:
             print(f"  [Aviso] No se pudo extraer ID de {nombre}, se omite.")
@@ -180,17 +173,17 @@ def main() -> None:
             continue
 
         # Obtener procesador
-        codigo_seccion = ext_sec(nombre)
-        procesador_html_configurado = obtener_procesador_por_seccion(revista, codigo_seccion)
+        codigo_seccion = revista.extraer_seccion(nombre)
+        procesador_html_configurado = obtener_procesador_por_seccion(revista.codigo, codigo_seccion)
 
         # Generar subcarpeta contenedora
-        salida_revista_dir = os.path.join(SALIDA_DIR, revista.upper())
+        salida_revista_dir = os.path.join(SALIDA_DIR, revista.codigo.upper())
 
         # Ejecutar
         exito = procesar_carpeta_revista(
             nombre_carpeta=nombre, 
             ruta_carpeta=ruta, 
-            procesador_css=proc_css, 
+            procesador_css=revista.procesar_css, 
             procesador_html=procesador_html_configurado,
             salida_base=salida_revista_dir
         )
@@ -199,7 +192,7 @@ def main() -> None:
             registrar_en_bitacora(BITACORA_PATH, clave_bitacora)
             ids_procesados.append(clave_bitacora)
             procesadas += 1
-            print(f"  [OK] {nombre} procesada correctamente en {revista.upper()}.")
+            print(f"  [OK] {nombre} procesada correctamente en {revista.codigo.upper()}.")
         else:
             errores += 1
             print(f"  [Error] Fallo al procesar {nombre}.")
