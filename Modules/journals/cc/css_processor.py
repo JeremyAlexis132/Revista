@@ -256,6 +256,29 @@ p.trs, p.trul, p.TRI, p.TRPU, p[class*="trs"], p[class*="trul"] {
     margin-top: 0 !important;
 }
 
+/* Listas numeradas: conservar la sangría y escala del documento fuente. */
+ol:has(li.nump, li.nums, li.numul) {
+    list-style-type: decimal !important;
+    padding-left: 0 !important;
+    margin-top: 1em !important;
+    margin-bottom: 1em !important;
+}
+ol > li.nump, ol > li.nums, ol > li.numul {
+    box-sizing: border-box;
+    position: static;
+    display: list-item;
+    list-style-position: outside !important;
+    list-style-type: decimal !important;
+    font-size: 1em !important;
+    line-height: 1.2 !important;
+    margin-left: 1.5em !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+}
+ol > li.nump::before, ol > li.nums::before, ol > li.numul::before {
+    content: none !important;
+}
+
 /* Listas (letrap / letras / letraul): mismo tamaño que cuerpo de texto, numeración decimal */
 ol:has(li.letrap, li.letras, li.letraul) {
     list-style-type: decimal !important;
@@ -275,6 +298,7 @@ li.rayas, li.nums {
     list-style: none !important;
     position: relative;
 }
+
 li.rayas::before, li.nums::before {
     content: "— ";
     position: absolute;

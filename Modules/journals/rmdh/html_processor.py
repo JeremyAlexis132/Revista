@@ -10,6 +10,12 @@ from bs4 import BeautifulSoup
 from Modules.journals.cc import html_processor as cc
 
 
+_DIGITOS_ARABIGOS = str.maketrans(
+    "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
+    "01234567890123456789",
+)
+
+
 def _normalizar_html_rmdh(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     equivalencias = {
@@ -27,6 +33,11 @@ def _normalizar_html_rmdh(html: str) -> str:
         "BODY-text": "cuerpo_texto",
     }
     for tag in soup.find_all(True):
+        idioma = tag.get("lang", "")
+        if idioma.lower().startswith("ar"):
+            del tag["lang"]
+        if tag.get("dir", "").lower() == "rtl":
+            del tag["dir"]
         clases = tag.get("class", [])
         nuevas_clases = [equivalencias.get(clase, clase) for clase in clases]
         nuevas_clases = [
@@ -40,6 +51,10 @@ def _normalizar_html_rmdh(html: str) -> str:
             tag.name = "h1"
         elif "titulo_ingles" in nuevas_clases:
             tag.name = "h2"
+
+    for texto in soup.find_all(string=True):
+        texto.replace_with(str(texto).translate(_DIGITOS_ARABIGOS))
+
     return str(soup)
 
 
