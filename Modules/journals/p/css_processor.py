@@ -148,6 +148,33 @@ def corregir_css(contenido_css: str) -> str:
     return _RE_REGLA.sub(_convertir_regla, sin_comentarios)
 
 
+def generar_css_base() -> str:
+    """
+    Estilos de respaldo para las clases de carácter más comunes. Se colocan ANTES del
+    CSS de InDesign del artículo, así que si el artículo las define, las suyas ganan;
+    si no (cada exportación solo trae los estilos que usa), el aspecto sigue siendo correcto.
+    """
+    return """/* ---------- Estilos de respaldo (los del artículo tienen prioridad) ---------- */
+.grises-vv, .BOLD-ITALIC, .bold-grises-redondas {
+    color: #706f6f;
+    font-weight: 700;
+}
+.bold-grises-italicas {
+    color: #706f6f;
+    font-style: italic;
+}
+.medium-gris-avenir {
+    color: #706f6f;
+}
+.cursivas {
+    font-style: italic;
+}
+.super-ndice {
+    vertical-align: super;
+}
+"""
+
+
 def generar_css_referencia() -> str:
     return """/* ============================================
    CSS adicional — Problema (formato tipo documento PDF)
@@ -194,14 +221,23 @@ body {
 .contenedor h1.TCC-1 {
     font-size: 1.5em;
     line-height: 1.25;
-    margin-top: 1.2em;
-    margin-bottom: 0.5em;
+    margin: 1.2em 0 0.5em 0;
+    color: var(--gris);
+    font-weight: 700;
+    text-align: center;
+    text-align-last: center;
+    text-indent: 0;
 }
 .contenedor h2.TCC-2 {
     font-size: 1.15em;
     line-height: 1.3;
-    margin-top: 0;
-    margin-bottom: 1.8em;
+    margin: 0 0 1.8em 0;
+    color: var(--gris);
+    font-style: italic;
+    font-weight: 400;
+    text-align: center;
+    text-align-last: center;
+    text-indent: 0;
 }
 
 /* Título que InDesign exportó como párrafo normal (p. ej. reseñas: referencia del libro).
@@ -237,11 +273,22 @@ body {
 }
 .contenedor p.AUT {
     font-size: 1.1em;
+    color: #000000;
+    text-align: center;
+    text-align-last: center;
+    text-indent: 0;
+    margin-left: 0;
+    margin-right: 0;
 }
 .contenedor p.orcid {
     font-size: 0.9em;
     margin-top: 0.6em;
     margin-bottom: 0.3em;
+    margin-left: 0;
+    margin-right: 0;
+    text-align: center;
+    text-align-last: center;
+    text-indent: 0;
 }
 .contenedor a.orcid-icono {
     display: inline-block;
@@ -259,6 +306,11 @@ body {
 .contenedor p.adscripcion_mail {
     font-size: 0.9em;
     margin-top: 0.15em;
+    margin-left: 0;
+    margin-right: 0;
+    text-align: center;
+    text-align-last: center;
+    text-indent: 0;
 }
 
 /* ---------- Fechas (derecha) y DOI (izquierda) ---------- */
@@ -268,9 +320,16 @@ body {
 }
 .contenedor .fechas p {
     font-size: 1em;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    text-indent: 0 !important;
+    text-align: right !important;
+    text-align-last: right !important;
 }
 .contenedor p.DOI {
     font-size: 0.95em;
+    margin-left: 0;
+    text-indent: 0;
     text-align: left;
     text-align-last: left;
     margin-top: 0.8em;
@@ -293,6 +352,14 @@ body {
     text-align: justify;
     text-align-last: left;
 }
+.contenedor p.resumen, .contenedor p.palabras-clave,
+.contenedor p.resumen_ingles, .contenedor p.keywords {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    text-indent: 0 !important;
+    text-align: justify !important;
+    text-align-last: left !important;
+}
 .contenedor p.resumen {
     margin-top: 1.2em;
     margin-bottom: 0;
@@ -310,15 +377,21 @@ body {
     margin-bottom: 1.8em;
 }
 .contenedor p.SUMARIO {
-    margin-top: 0;
-    margin-bottom: 2.4em;
+    margin: 1.8em 2em 2.4em 2em;
+    text-indent: 0;
+    text-align: justify;
+    text-align-last: center;
 }
 
 /* ---------- Cuerpo ---------- */
 .contenedor h3.VV {
     font-size: 1.2em;
-    margin-top: 2.2em;
-    margin-bottom: 0.9em;
+    margin: 2.2em 0 0.9em 0;
+    color: var(--gris);
+    font-weight: 700;
+    text-align: center;
+    text-align-last: center;
+    text-indent: 0;
 }
 .contenedor h4.IA {
     font-size: 1.1em;
@@ -337,19 +410,25 @@ body {
     color: var(--gris);
 }
 
-/* Citas en bloque (si el artículo las trae) */
-.contenedor p.TRUN, .contenedor p.TRP, .contenedor p.TRI,
-.contenedor p.TRPU, .contenedor p.TRS, .contenedor p.TRUL {
+/* Citas en bloque (trun, trp, tri, trpu...): sangradas de ambos lados, letra un poco menor.
+   Los párrafos consecutivos de una misma cita van pegados. */
+.contenedor p.cita_bloque {
     margin: 1em 2.5em;
-    font-size: 0.95em;
+    font-size: 0.92em;
+    line-height: 1.5;
     text-align: justify;
+    text-align-last: left;
     text-indent: 0;
+}
+.contenedor p.cita_bloque + p.cita_bloque {
+    margin-top: 0;
 }
 
 /* Epígrafe (cita inicial antes del primer encabezado): bloque a la derecha,
    texto justificado y fuente alineada a la derecha en su propia línea */
 .contenedor .epigrafe {
-    width: min(55%, 34em);
+    width: fit-content;
+    max-width: min(55%, 34em);
     margin: 1.2em 0 2.2em auto;
 }
 .contenedor .epigrafe p {
@@ -483,7 +562,8 @@ body {
         padding: 1.5em 4% 2em 4%;
     }
     .contenedor h1.TCC-1 { font-size: 1.3em; }
-    .contenedor .epigrafe { width: 88%; }
+    .contenedor .epigrafe { max-width: 88%; }
+    .contenedor p.cita_bloque { margin-left: 1.2em; margin-right: 1.2em; }
 }
 
 /* ---------- Impresión ---------- */
@@ -505,7 +585,7 @@ body {
 
 
 def procesar_y_combinar_css(rutas_css_origen: List[str]) -> str:
-    css_final = []
+    css_final = [generar_css_base()]
     for ruta_css in rutas_css_origen:
         try:
             with open(ruta_css, "r", encoding="utf-8") as f:

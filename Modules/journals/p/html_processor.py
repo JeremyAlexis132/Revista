@@ -37,6 +37,19 @@ _ETIQUETAS_SEMANTICAS = {
 
 _KW_COMO_CITAR = ("cómo citar", "como citar", "how to cite", "comment citer")
 _RE_KEYWORDS = re.compile(r"^\s*(keywords?|key\s+words|mots[\s-]*cl[eé]s?)\b", re.IGNORECASE)
+# Estilos de cita en bloque (varían por número y por mayúsculas/minúsculas)
+_ESTILOS_CITA_BLOQUE = {"trun", "trp", "tri", "trpu", "trunic", "trs", "trul"}
+_PREFIJOS_FECHA = ("recepcion", "recepción", "aceptacion", "aceptación", "publicacion",
+                   "publicación", "recibido", "aceptado", "publicado", "fecha")
+_RE_ETIQUETA_FECHA = re.compile(
+    r"^\s*(?:fecha\s+de\s+|date\s+(?:of\s+)?)?"
+    r"(recepci[oó]n|recibido|aceptaci[oó]n|aceptado|publicaci[oó]n|publicado|received|accepted|published|submitted)\s*[:.]",
+    re.IGNORECASE,
+)
+_RE_AUTOR_CLASE = re.compile(r"^aut(?:[-_].*)?$", re.IGNORECASE)   # AUT, AUT-simple, AUT-DOS-NOMBRES...
+_RE_PALABRAS_CLAVE = re.compile(r"^\s*(palabras?[\s-]*clave|palavras?[\s-]*chave|mots[\s-]*cl[eé]s?)\s*:", re.IGNORECASE)
+_RE_SUMARIO = re.compile(r"^\s*(sumario|summary|sommaire)\s*[:.]", re.IGNORECASE)
+_RE_ANIO = re.compile(r"\b(?:1[89]|20)\d{2}\b")
 _RE_TITULO_FIGURA = re.compile(
     r"^\s*(ilustraci[oó]n|figura|tabla|gr[aá]fic[ao]|cuadro|mapa|imagen|esquema|diagrama)\s*\d+",
     re.IGNORECASE,
@@ -74,6 +87,7 @@ class ContenidoArticulo:
     resumen: str = ""
     palabras_clave: str = ""
     abstract: str = ""
+    abstract_primero: bool = False  # artículos en inglés: el Abstract va antes que el Resumen
     keywords: str = ""
     sumario: str = ""
     cuerpo: List[str] = field(default_factory=list)
@@ -246,7 +260,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             continue
 
         # --- autor(es) ---
-        if "aut" in clases_lower:
+        if any(_RE_AUTOR_CLASE.match(c) for c in clases_lower):
             zona_autor = True
             autor_actual = Autor(nombre_html=_html_interno(elem))
             contenido.autores_obj.append(autor_actual)
@@ -272,14 +286,29 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         # --- fechas y DOI ---
         # El DOI se reconoce por su contenido: en algunos números InDesign lo exporta
         # con el estilo de las fechas (recibido-y-aceptado) en lugar del estilo DOI.
-        en_encabezado = not contenido.resumen and not contenido.cuerpo and not en_como_citar
+        en_encabezado = (
+            not contenido.resumen and not contenido.abstract
+            and not contenido.cuerpo and not en_como_citar
+        )
         es_doi = "doi" in clases_lower or (
             elem.name == "p" and en_encabezado and len(texto) < 200 and (
                 re.match(r"^\s*doi\b", texto, re.IGNORECASE)
                 or (not contenido.doi_html and "doi.org" in texto.lower())
             )
         )
-        if "recibido-y-aceptado" in clases_lower and not es_doi:
+        es_fecha = (
+            elem.name == "p" and len(texto) < 120 and en_encabezado and (
+                _RE_ETIQUETA_FECHA.match(texto)
+                # por estilo, pero solo si el texto parece fecha (hay estilos de fecha
+                # reutilizados para otras cosas, p. ej. un epígrafe)
+                or (
+                    ("recibido-y-aceptado" in clases_lower
+                     or any(c.startswith(_PREFIJOS_FECHA) for c in clases_lower))
+                    and _RE_ANIO.search(texto)
+                )
+            )
+        )
+        if es_fecha and not es_doi:
             zona_autor = False
             contenido.fechas.append(str(elem))
             continue
@@ -293,8 +322,20 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                 contenido.doi_html = f'<p class="DOI">{_html_interno(elem).strip()}</p>'
             continue
 
+        # --- Sumario: por estilo o por su etiqueta (en artículos en inglés viene como "Summary:"
+        #     con el estilo del resumen) ---
+        if "sumario" in clases_lower or (
+            elem.name == "p" and not en_como_citar and len(texto) < 1200 and _RE_SUMARIO.match(texto)
+            and not any(_RE_ENCABEZADO.match(b) for b in contenido.cuerpo)  # aún no empieza el texto
+        ):
+            zona_autor = False
+            bloque_resumen = None
+            elem["class"] = ["SUMARIO"]  # mismo aspecto que el Sumario normal (centrado)
+            contenido.sumario = str(elem)
+            continue
+
         # --- resúmenes ---
-        if clases_lower and any(c in clases_lower for c in ("resumen", "resumen_ingles", "palabras-clave", "sumario")):
+        if clases_lower and any(c in clases_lower for c in ("resumen", "resumen_ingles", "palabras-clave", "keywords", "sumario")):
             zona_autor = False
         # Continuación del resumen/abstract: InDesign la exporta con otro estilo
         # (p. ej. resumen_seg), uno por párrafo adicional.
@@ -303,7 +344,7 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             bloque_resumen = "resumen" if not contenido.abstract else "abstract"
         if es_continuacion or (
             bloque_resumen and elem.name == "p"
-            and not any(c in clases_lower for c in ("resumen", "resumen_ingles", "palabras-clave", "sumario"))
+            and not any(c in clases_lower for c in ("resumen", "resumen_ingles", "palabras-clave", "keywords", "sumario"))
             and _cierra_bloque_resumen(hijos, i)
         ):
             _agregar_clase(elem, "resumen_seg")
@@ -317,15 +358,25 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
             bloque_resumen = "resumen"
             continue
         if "resumen_ingles" in clases_lower:
+            if not contenido.resumen:
+                contenido.abstract_primero = True
             contenido.abstract = str(elem)
             bloque_resumen = "abstract"
             continue
-        if "palabras-clave" in clases_lower:
+        es_kw_pc = elem.name == "p" and en_encabezado and len(texto) < 600 and (
+            _RE_KEYWORDS.match(texto) or _RE_PALABRAS_CLAVE.match(texto)
+        )
+        if "palabras-clave" in clases_lower or "keywords" in clases_lower or es_kw_pc:
             bloque_resumen = None
-            if _RE_KEYWORDS.match(texto):
+            zona_autor = False
+            es_ingles = bool(_RE_KEYWORDS.match(texto)) or (
+                "keywords" in clases_lower and not _RE_PALABRAS_CLAVE.match(texto)
+            )
+            if es_ingles:
                 _agregar_clase(elem, "keywords")
                 contenido.keywords = str(elem)
             else:
+                _agregar_clase(elem, "palabras-clave")
                 contenido.palabras_clave = str(elem)
             continue
         if "sumario" in clases_lower:
@@ -392,6 +443,10 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         elif ultimo_fue_figura and _RE_FUENTE_FIGURA.match(texto):
             _agregar_clase(elem, "fuente_figura")
         ultimo_fue_figura = False
+
+        # --- citas en bloque (trun, trp, tri, trpu...) ---
+        if any(c in _ESTILOS_CITA_BLOQUE for c in clases_lower):
+            _agregar_clase(elem, "cita_bloque")
 
         # --- cuerpo, encabezados y referencias (se conserva el orden original) ---
         contenido.cuerpo.append(str(elem))
@@ -481,7 +536,7 @@ def _cierra_bloque_resumen(hijos: List[Tag], i: int) -> bool:
         if not isinstance(sig, Tag):
             continue
         clases = [c.lower() for c in (sig.get("class") or [])]
-        if "palabras-clave" in clases:
+        if "palabras-clave" in clases or "keywords" in clases:
             return True
         if "sumario" in clases or sig.name in ("h3", "h4", "h5"):
             return False
@@ -532,10 +587,11 @@ def generar_html_referencia(contenido: ContenidoArticulo, css_inline: str, nombr
         *bloques_autores,
         bloque_fechas,
         contenido.doi_html,
-        contenido.resumen,
-        contenido.palabras_clave,
-        contenido.abstract,
-        contenido.keywords,
+        *(
+            [contenido.abstract, contenido.keywords, contenido.resumen, contenido.palabras_clave]
+            if contenido.abstract_primero
+            else [contenido.resumen, contenido.palabras_clave, contenido.abstract, contenido.keywords]
+        ),
         contenido.sumario,
     ]
     cuerpo = [*contenido.cuerpo, bloque_como_citar, contenido.notas_html]
