@@ -78,6 +78,9 @@ def _es_titulo_declaracion(texto: str) -> bool:
     )
     return texto_normalizado in titulos
 
+_MES = r"(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)"
+
+
 def _generar_identificadores_bmdc(contenido: ContenidoArticulo, nombre_revista: str) -> List[str]:
     revista_id = str(nombre_revista.split('_')[0])
     vol_num = "[Vol(Núm)]"
@@ -88,12 +91,24 @@ def _generar_identificadores_bmdc(contenido: ContenidoArticulo, nombre_revista: 
     for cita in contenido.como_citar:
         texto_plano = BeautifulSoup(cita, "html.parser").get_text()
         if "Boletín Mexicano de Derecho Comparado" in texto_plano or "BMDC" in texto_plano:
-            vol_match = re.search(r'vol\.?\s*(\d+)', texto_plano, re.IGNORECASE)
-            num_match = re.search(r'(?:n[úu]m(?:ero)?\.?|no\.)\s*(\d+)', texto_plano, re.IGNORECASE)
+            # Solo se busca después del nombre de la revista: antes viene el título del
+            # artículo, que puede traer años o palabras que no son parte del número.
+            pos_revista = texto_plano.find("Boletín Mexicano de Derecho Comparado")
+            tras_revista = texto_plano[pos_revista:] if pos_revista >= 0 else texto_plano
+            tras_revista = re.sub(r'https?://\S+', '', tras_revista)
+
+            vol_match = re.search(r'vol\.?\s*(\d+)', tras_revista, re.IGNORECASE)
+            num_match = re.search(r'(?:n[úu]m(?:ero)?\.?|no\.)\s*(\d+)', tras_revista, re.IGNORECASE)
+            # Solo meses reales (p. ej. "enero-abril de 2025"); antes cualquier palabra
+            # seguida de un año valía, y salía algo como "México 2025".
             mes_match = re.search(
-                r'([a-záéíóúüñA-Z]{3,}(?:\s*[-–]\s*[a-záéíóúüñA-Z]{3,})?\s*,?\s*(?:de\s*)?\d{4})',
-                texto_plano, re.IGNORECASE
+                rf'\b({_MES}(?:\s*[-–]\s*{_MES})?\s*,?\s*(?:de\s*)?\d{{4}})',
+                tras_revista, re.IGNORECASE
             )
+            if not mes_match:
+                anio_match = re.search(r'\b((?:19|20)\d{2})\b', tras_revista)
+                if anio_match:
+                    meses_ano = f"[Meses de {anio_match.group(1)}]"
             texto_sin_urls = re.sub(r'https?://\S+', '', texto_plano)
             eid_match = re.search(r'\b(e\d{5,6})\b', texto_sin_urls, re.IGNORECASE)
 
@@ -213,14 +228,17 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
         else:
             capturando_fecha_fragmentada = False
 
-        if ("titulo_espanol" in clases or "titulo" in clases_limpias) and "ingles" not in clases:
+        es_tcc1 = bool(re.search(r"tcc[-_]?1(?![\d])", clases))
+        es_tcc2 = bool(re.search(r"tcc[-_]?2(?![\d])", clases))
+
+        if ("titulo_espanol" in clases or "titulo" in clases_limpias or es_tcc1) and "ingles" not in clases:
             if not contenido.titulo_es:
                 if elem.name != "h1": elem.name = "h1"
                 elem['class'] = ['titulo_espanol']
                 contenido.titulo_es = str(elem)
             continue
             
-        if "titulo_ingles" in clases or "subtitulo" in clases_limpias:
+        if "titulo_ingles" in clases or "subtitulo" in clases_limpias or es_tcc2:
             if not contenido.titulo_en:
                 if elem.name != "h2": elem.name = "h2"
                 elem['class'] = ['titulo_ingles']
@@ -421,6 +439,10 @@ def extraer_contenido(html_path: str) -> ContenidoArticulo:
                     elif tiene_imagen_real:
                         elem.name = "p"
                         elem['class'] = ['imagen-articulo']
+                    elif "sumario" in clases_limpias:
+                        # con el prefijo ESTILOS-FINALES_ se confundía con texto de cuerpo
+                        elem.name = "p"
+                        elem['class'] = ['SUMARIO']
                     elif "pp" in clases_limpias or "paraoverride" in clases_originales:
                         if not any(x in clases_originales for x in ["fuente", "pie", "caption", "mapa", "figura", "tabla"]):
                             elem.name = "p"
